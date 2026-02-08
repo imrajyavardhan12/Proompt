@@ -1,0 +1,137 @@
+# Proompt
+
+A desktop app and CLI that turns rough prompts into optimized ones for AI assistants and image generators.
+
+You type "make a sorting function", and Proompt rewrites it into a well-structured prompt with context, constraints, and platform-specific formatting -- ready for Claude, GPT, Gemini, Midjourney, DALL-E, or Stable Diffusion.
+
+## How it works
+
+```
+your rough prompt  -->  Proompt  -->  platform-optimized prompt
+```
+
+Proompt sends your input through an LLM with carefully tuned system prompts that know the quirks of each target platform. Claude gets XML tags. GPT gets structured markdown. Midjourney gets style parameters and aspect ratios. You bring your own API key.
+
+## Install
+
+### Prerequisites
+
+- Rust 1.75+ (`rustup` to install)
+- Node.js 18+
+- [bun](https://bun.sh) 1.0+
+
+### CLI
+
+```bash
+cargo build --release
+sudo cp ./target/release/proompt /usr/local/bin/
+
+proompt config set byok.api_key "YOUR_OPENAI_KEY"
+proompt "explain how docker works"
+```
+
+### Desktop app
+
+```bash
+cd app
+bun install
+bunx tauri build
+```
+
+The `.dmg` lands in `app/src-tauri/target/release/bundle/dmg/`. Open it and drag to Applications.
+
+For development with hot-reload: `bunx tauri dev`
+
+## Usage
+
+### CLI
+
+```bash
+# text prompt (streams on OpenAI)
+proompt "explain kubernetes in simple terms"
+
+# target a specific platform
+proompt --platform claude "sort users by age and filter inactive"
+
+# image prompt
+proompt --image "a cat floating in space"
+proompt --image --platform midjourney "sunset over mountains"
+
+# use a template
+proompt --template ghibli-style "my cat on the couch"
+
+# pipe from stdin
+echo "explain rust ownership" | proompt
+
+# configuration
+proompt config show
+proompt config set byok.provider anthropic
+proompt templates list
+```
+
+### Desktop app
+
+Three tabs: Enhance, Templates, Settings.
+
+- Pick text or image mode, choose a target platform, type your prompt, hit Enhance
+- Browse 10 built-in templates for common tasks (code review, Ghibli-style images, etc.)
+- Settings has provider/model switching, API key management, and connection testing
+
+## Providers
+
+| Provider | Streaming | Default model |
+|----------|-----------|---------------|
+| OpenAI | Yes (SSE) | gpt-4o |
+| Anthropic | No (batch) | claude-sonnet-4 |
+| Google | No (batch) | gemini-2.0-flash |
+
+Switch with `proompt config set byok.provider <openai|anthropic|google>`. The model auto-updates when you switch providers.
+
+## API keys
+
+Keys are stored in your OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service). They never leave your machine except when sent to the provider you chose.
+
+```bash
+proompt config set byok.api_key YOUR_KEY           # stores for active provider
+proompt config set openai.api_key YOUR_KEY          # stores for specific provider
+```
+
+Environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`) work as a fallback.
+
+## Project structure
+
+```
+├── crates/
+│   ├── core/          # shared Rust library -- config, LLM clients, enhancement engine
+│   └── cli/           # CLI binary (clap + indicatif + console)
+├── app/
+│   ├── src/           # Svelte 5 frontend
+│   └── src-tauri/     # Tauri 2 backend (bridges frontend to core)
+├── templates/         # external template definitions
+└── Cargo.toml         # workspace root
+```
+
+The core library is shared between CLI and desktop app. Both are thin wrappers calling the same `enhance()` and `enhance_stream()` functions.
+
+## Tech stack
+
+Rust, Tauri 2, Svelte 5, Vite, OpenAI/Anthropic/Google APIs.
+
+Config stored as TOML at `~/.config/proompt/config.toml`.
+
+## Running tests
+
+```bash
+cargo test                         # all 19 tests
+cargo test -p proompt-core         # core library only
+```
+
+## Status
+
+Milestones 1 and 2 are complete -- core engine, multi-provider support, streaming, CLI with animations, desktop app with full UI. 19 tests passing.
+
+Not yet built: Supabase auth, Stripe billing, SuperMemory integration, CI/CD, code signing.
+
+## License
+
+MIT

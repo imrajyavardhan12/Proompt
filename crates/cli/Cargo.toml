@@ -1,0 +1,22 @@
+[package]
+name = "proompt-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "proompt"
+path = "src/main.rs"
+
+[dependencies]
+proompt-core = { path = "../core" }
+tokio = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+indicatif = "0.17"
+console = "0.15"
