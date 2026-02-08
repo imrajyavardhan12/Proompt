@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/nickel-org/nickel.rs/master/templates/schema.json",
   "productName": "Proompt",
   "version": "0.1.0",
-  "identifier": "com.proompt.app",
+  "identifier": "com.proompt.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
