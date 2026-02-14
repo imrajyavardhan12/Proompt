@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use proompt_core::{
     config::{self as cfg, Mode},
     enhance::{self, EnhanceOptions, EnhanceRequest},
+    integrations::supermemory::SuperMemoryClient,
     platform::{EnhanceType, detect_platform},
     templates::{Template, TemplateFilter, TemplateManager},
 };
@@ -15,6 +16,7 @@ pub async fn enhance_prompt(
     platform: String,
     enhance_type: String,
     include_memory: bool,
+    style_hints: Option<Vec<String>>,
 ) -> Result<String, String> {
     let config = cfg::load_config().map_err(|e| e.to_string())?;
 
@@ -31,20 +33,49 @@ pub async fn enhance_prompt(
         }
     };
 
+    let normalized_style_hints = style_hints
+        .map(|hints| {
+            hints
+                .into_iter()
+                .map(|hint| hint.trim().to_string())
+                .filter(|hint| !hint.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .filter(|hints| !hints.is_empty());
+
+    let supermemory_context = if include_memory && config.supermemory.enabled {
+        match fetch_supermemory_context(&prompt, config.supermemory.context_limit).await {
+            Ok(context) if !context.is_empty() => Some(context),
+            _ => None,
+        }
+    } else {
+        None
+    };
+
     let request = EnhanceRequest {
         prompt,
         platform,
         enhancement_type,
         options: EnhanceOptions {
             include_supermemory: include_memory,
-            style_hints: None,
+            style_hints: if enhancement_type == EnhanceType::Image {
+                normalized_style_hints
+            } else {
+                None
+            },
             max_tokens: None,
         },
     };
 
-    let result = enhance::enhance(request, &config.byok.provider, &api_key, Some(config.byok.model), None)
-        .await
-        .map_err(|e| e.to_string())?;
+    let result = enhance::enhance(
+        request,
+        &config.byok.provider,
+        &api_key,
+        Some(config.byok.model),
+        supermemory_context,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
 
     Ok(result.enhanced_prompt)
 }
@@ -62,7 +93,9 @@ pub fn apply_template(
     fields: HashMap<String, String>,
 ) -> Result<String, String> {
     let manager = TemplateManager::new();
-    manager.apply(&template_id, &fields).map_err(|e| e.to_string())
+    manager
+        .apply(&template_id, &fields)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -135,6 +168,16 @@ pub async fn test_api_connection() -> Result<String, String> {
     result
         .map(|_| "Connection successful!".to_string())
         .map_err(|e| e.to_string())
+}
+
+async fn fetch_supermemory_context(prompt: &str, limit: u32) -> Result<Vec<String>, String> {
+    let api_key = cfg::get_api_key("supermemory").map_err(|e| e.to_string())?;
+    let client = SuperMemoryClient::new(api_key);
+    let memories = client
+        .search(prompt, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(memories.into_iter().map(|m| m.content).collect())
 }
 
 #[tauri::command]

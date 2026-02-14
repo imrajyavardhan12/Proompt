@@ -23,9 +23,13 @@
   let selectedTemplate = $state<Template | null>(null);
   let fieldValues = $state<Record<string, string>>({});
   let generatedPrompt = $state("");
-  let filter = $state<"all" | "Image" | "Text">("all");
+  let filter = $state<"all" | "image" | "text">("all");
   let search = $state("");
   let copied = $state(false);
+
+  function normalizeCategory(category: string) {
+    return category.toLowerCase();
+  }
 
   async function loadTemplates() {
     try {
@@ -39,7 +43,7 @@
 
   let filteredTemplates = $derived(
     templates.filter((t) => {
-      if (filter !== "all" && t.category !== filter) return false;
+      if (filter !== "all" && normalizeCategory(t.category) !== filter) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
         return t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q) || t.id.toLowerCase().includes(q);
@@ -92,8 +96,8 @@
   <div class="toolbar">
     <div class="filter-chips">
       <button class="chip" class:active={filter === "all"} onclick={() => (filter = "all")}>All</button>
-      <button class="chip" class:active={filter === "Text"} onclick={() => (filter = "Text")}>Text</button>
-      <button class="chip" class:active={filter === "Image"} onclick={() => (filter = "Image")}>Image</button>
+      <button class="chip" class:active={filter === "text"} onclick={() => (filter = "text")}>Text</button>
+      <button class="chip" class:active={filter === "image"} onclick={() => (filter = "image")}>Image</button>
     </div>
     <div class="search-wrap">
       <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -114,8 +118,8 @@
           onclick={() => selectTemplate(t)}
         >
           <div class="card-badges">
-            <span class="badge" class:img={t.category === "Image"}>
-              {t.category === "Image" ? "IMG" : "TXT"}
+            <span class="badge" class:img={normalizeCategory(t.category) === "image"}>
+              {normalizeCategory(t.category) === "image" ? "IMG" : "TXT"}
             </span>
             {#if t.trending}
               <span class="badge trending">

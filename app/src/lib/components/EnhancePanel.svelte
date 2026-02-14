@@ -1,15 +1,24 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
 
+  interface AppConfig {
+    default_platform?: string;
+    default_image_platform?: string;
+  }
+
   let prompt = $state("");
   let enhancedPrompt = $state("");
-  let platform = $state("openai");
+  let platform = $state("claude");
   let mode = $state<"text" | "image">("text");
   let isLoading = $state(false);
   let includeMemory = $state(false);
   let error = $state("");
   let copied = $state(false);
   let selectedStyles = $state<Set<string>>(new Set());
+  let resultPlatform = $state("");
+  let resultMode = $state<"text" | "image">("text");
+  let defaultTextPlatform = $state("claude");
+  let defaultImagePlatform = $state("midjourney");
 
   const textPlatforms = [
     { id: "claude", label: "Claude" },
@@ -31,11 +40,33 @@
   ];
 
   let platforms = $derived(mode === "text" ? textPlatforms : imagePlatforms);
+  let isResultStale = $derived(!!enhancedPrompt && (platform !== resultPlatform || mode !== resultMode));
+
+  function getPlatformLabel(id: string, enhancementMode: "text" | "image") {
+    const options = enhancementMode === "text" ? textPlatforms : imagePlatforms;
+    return options.find((p) => p.id === id)?.label ?? id;
+  }
+
+  async function loadConfigDefaults() {
+    try {
+      const config = await invoke<AppConfig>("get_config");
+      defaultTextPlatform = config.default_platform?.toLowerCase() || "claude";
+      defaultImagePlatform = config.default_image_platform?.toLowerCase() || "midjourney";
+      platform = defaultTextPlatform;
+    } catch {
+      defaultTextPlatform = "claude";
+      defaultImagePlatform = "midjourney";
+      platform = "claude";
+    }
+  }
+
+  $effect(() => { loadConfigDefaults(); });
 
   $effect(() => {
     const ids = platforms.map((p) => p.id);
+    const preferred = mode === "text" ? defaultTextPlatform : defaultImagePlatform;
     if (!ids.includes(platform)) {
-      platform = ids[0];
+      platform = ids.includes(preferred) ? preferred : ids[0];
     }
   });
 
@@ -58,14 +89,19 @@
     isLoading = true;
     error = "";
     enhancedPrompt = "";
+    const requestedPlatform = platform;
+    const requestedMode = mode;
     try {
       const result = await invoke<string>("enhance_prompt", {
         prompt: prompt,
-        platform: platform,
-        enhanceType: mode,
+        platform: requestedPlatform,
+        enhanceType: requestedMode,
         includeMemory: includeMemory,
+        styleHints: requestedMode === "image" ? Array.from(selectedStyles) : null,
       });
       enhancedPrompt = result;
+      resultPlatform = requestedPlatform;
+      resultMode = requestedMode;
     } catch (e: any) {
       error = e.toString();
     } finally {
@@ -201,7 +237,10 @@
       <div class="result-bar">
         <div class="result-bar-left">
           <div class="result-dot"></div>
-          <span>Enhanced for {platforms.find(p => p.id === platform)?.label ?? platform}</span>
+          <span>Enhanced for {getPlatformLabel(resultPlatform, resultMode)}</span>
+          {#if isResultStale}
+            <span class="result-stale">Selection changed · regenerate</span>
+          {/if}
         </div>
         <button class="btn-ghost" class:copied onclick={copyToClipboard}>
           {#if copied}
@@ -582,6 +621,15 @@
     height: 7px;
     background: #10b981;
     border-radius: 50%;
+  }
+
+  .result-stale {
+    font-size: 10.5px;
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.25);
+    background: rgba(251, 191, 36, 0.08);
+    padding: 2px 6px;
+    border-radius: 999px;
   }
 
   .result-body {
