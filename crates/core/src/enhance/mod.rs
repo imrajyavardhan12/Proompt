@@ -1,5 +1,8 @@
+pub mod configured;
 pub mod image;
 pub mod text;
+
+pub use configured::*;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
