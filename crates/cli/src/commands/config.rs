@@ -1,6 +1,9 @@
 use anyhow::Result;
 use console::Style;
-use proompt_core::config::{self as cfg};
+use proompt_core::{
+    config::{self as cfg},
+    platform::{self, Platform},
+};
 
 use crate::output;
 
@@ -51,15 +54,13 @@ pub fn show() -> Result<()> {
     } else {
         Style::new().dim().apply_to("disabled").to_string()
     };
-    eprintln!(
-        "  {} {}",
-        muted.apply_to("supermemory:     "),
-        sm_status
-    );
+    eprintln!("  {} {}", muted.apply_to("supermemory:     "), sm_status);
 
     eprintln!();
     output::dim("  Tip: proompt config set byok.api_key YOUR_KEY to store API keys");
-    output::dim("  Tip: proompt config set byok.provider <openai|anthropic|google> to switch");
+    output::dim(
+        "  Tip: proompt config set byok.provider <openai|anthropic|google|openrouter> to switch",
+    );
     eprintln!();
 
     Ok(())
@@ -79,8 +80,12 @@ pub fn set(key: &str, value: &str) -> Result<()> {
             "google.api_key" => "google".to_string(),
             other => other.trim_end_matches(".api_key").to_string(),
         };
+        let service = cfg::api_key_service_name(&service);
         cfg::set_api_key(&service, value)?;
-        output::success(&format!("API key for '{}' stored in system keychain", service));
+        output::success(&format!(
+            "API key for '{}' stored in system keychain",
+            service
+        ));
         return Ok(());
     }
 
@@ -95,19 +100,31 @@ pub fn set(key: &str, value: &str) -> Result<()> {
             };
         }
         "default_platform" => {
-            config.default_platform =
-                proompt_core::platform::detect_platform(value);
+            let platform = platform::parse_platform(value).ok_or_else(|| {
+                anyhow::anyhow!("Invalid default platform. Use claude, openai, gemini, or generic")
+            })?;
+            if !platform.is_text_platform() {
+                anyhow::bail!("Invalid default platform. Use claude, openai, gemini, or generic");
+            }
+            config.default_platform = platform;
         }
         "default_image_platform" => {
-            config.default_image_platform =
-                proompt_core::platform::detect_platform(value);
+            let platform = platform::parse_platform(value).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Invalid default image platform. Use midjourney, dalle, sd, or generic"
+                )
+            })?;
+            if !platform.is_image_platform() && platform != Platform::Generic {
+                anyhow::bail!(
+                    "Invalid default image platform. Use midjourney, dalle, sd, or generic"
+                );
+            }
+            config.default_image_platform = platform;
         }
         "byok.provider" => {
-            config.byok.provider = value.to_string();
-            if config.byok.model.is_empty()
-                || !model_matches_provider(&config.byok.model, value)
-            {
-                config.byok.model = default_model_for_provider(value).to_string();
+            let old_model = config.byok.model.clone();
+            cfg::set_byok_provider(&mut config, value)?;
+            if config.byok.model != old_model {
                 output::dim(&format!("  Model auto-set to: {}", config.byok.model));
             }
         }
@@ -135,22 +152,4 @@ pub fn set(key: &str, value: &str) -> Result<()> {
     output::success(&format!("Set {} = {}", key, value));
 
     Ok(())
-}
-
-fn default_model_for_provider(provider: &str) -> &str {
-    match provider {
-        "openai" => "gpt-4o",
-        "anthropic" => "claude-sonnet-4-20250514",
-        "google" | "gemini" => "gemini-2.0-flash",
-        _ => "gpt-4o",
-    }
-}
-
-fn model_matches_provider(model: &str, provider: &str) -> bool {
-    match provider {
-        "openai" => model.starts_with("gpt") || model.starts_with("o1") || model.starts_with("o3"),
-        "anthropic" => model.starts_with("claude"),
-        "google" | "gemini" => model.starts_with("gemini"),
-        _ => true,
-    }
 }

@@ -84,8 +84,9 @@ Three tabs: Enhance, Templates, Settings.
 | OpenAI | Yes (SSE) | gpt-4o |
 | Anthropic | No (batch) | claude-sonnet-4 |
 | Google | No (batch) | gemini-2.0-flash |
+| OpenRouter | Yes (SSE) | openai/gpt-4o-mini |
 
-Switch with `proompt config set byok.provider <openai|anthropic|google>`. The model auto-updates when you switch providers.
+Switch with `proompt config set byok.provider <openai|anthropic|google|openrouter>`. The model auto-updates when you switch providers.
 
 ## API keys
 
@@ -94,9 +95,10 @@ Keys are stored in your OS keychain (macOS Keychain, Windows Credential Manager,
 ```bash
 proompt config set byok.api_key YOUR_KEY           # stores for active provider
 proompt config set openai.api_key YOUR_KEY          # stores for specific provider
+proompt config set openrouter.api_key YOUR_KEY      # stores OpenRouter key
 ```
 
-Environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`) work as a fallback.
+Environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) work as a fallback.
 
 ## Project structure
 

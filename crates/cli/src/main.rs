@@ -4,7 +4,11 @@ mod output;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "proompt", version, about = "Proompt - Universal prompt enhancement tool")]
+#[command(
+    name = "proompt",
+    version,
+    about = "Proompt - Universal prompt enhancement tool"
+)]
 struct Cli {
     /// Prompt to enhance (text mode by default)
     prompt: Option<String>,

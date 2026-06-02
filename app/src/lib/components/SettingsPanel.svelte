@@ -6,6 +6,7 @@
   let model = $state("gpt-4o");
   let apiKey = $state("");
   let defaultPlatform = $state("claude");
+  let defaultImagePlatform = $state("midjourney");
   let supermemoryEnabled = $state(false);
   let supermemoryKey = $state("");
   let status = $state<{ type: "success" | "error"; text: string } | null>(null);
@@ -16,6 +17,7 @@
     { id: "openai", label: "OpenAI", desc: "GPT-4o, o1, o3", models: ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini"] },
     { id: "anthropic", label: "Anthropic", desc: "Claude Sonnet, Haiku", models: ["claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"] },
     { id: "google", label: "Google", desc: "Gemini 2.0, 1.5", models: ["gemini-2.0-flash", "gemini-2.0-pro", "gemini-1.5-flash"] },
+    { id: "openrouter", label: "OpenRouter", desc: "Claude, GPT, Gemini, OSS", models: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "google/gemini-2.0-flash-001", "meta-llama/llama-3.1-8b-instruct"] },
   ];
 
   let currentProvider = $derived(providers.find((p) => p.id === provider) ?? providers[0]);
@@ -27,6 +29,7 @@
       provider = config.byok?.provider || "openai";
       model = config.byok?.model || "gpt-4o";
       defaultPlatform = config.default_platform?.toLowerCase() || "claude";
+      defaultImagePlatform = config.default_image_platform?.toLowerCase() || "midjourney";
       supermemoryEnabled = config.supermemory?.enabled || false;
     } catch (e: any) {
       showStatus("error", `Failed to load: ${e}`);
@@ -35,11 +38,11 @@
 
   $effect(() => { loadConfig(); });
 
-  $effect(() => {
-    if (!currentProvider.models.includes(model)) {
-      model = currentProvider.models[0];
-    }
-  });
+  function selectProvider(providerId: string) {
+    provider = providerId;
+    const selectedProvider = providers.find((p) => p.id === providerId) ?? providers[0];
+    model = selectedProvider.models[0];
+  }
 
   function showStatus(type: "success" | "error", text: string) {
     status = { type, text };
@@ -77,7 +80,7 @@
   async function saveConfig() {
     saving = true;
     try {
-      await invoke("save_settings", { mode, provider, model, defaultPlatform, supermemoryEnabled });
+      await invoke("save_settings", { mode, provider, model, defaultPlatform, defaultImagePlatform, supermemoryEnabled });
       showStatus("success", "Settings saved");
     } catch (e: any) { showStatus("error", `${e}`); }
     finally { saving = false; }
@@ -98,7 +101,7 @@
         <button
           class="provider-card"
           class:active={provider === p.id}
-          onclick={() => (provider = p.id)}
+          onclick={() => selectProvider(p.id)}
         >
           <span class="provider-name">{p.label}</span>
           <span class="provider-desc">{p.desc}</span>
@@ -117,6 +120,13 @@
         {/each}
       </select>
     </div>
+    <input
+      class="model-input"
+      type="text"
+      bind:value={model}
+      placeholder={provider === "openrouter" ? "provider/model-id" : "Custom model id"}
+    />
+    <p class="hint">Choose a recommended model or type a custom model id.</p>
   </section>
 
   <!-- API Key -->
@@ -126,7 +136,7 @@
       <input
         type="password"
         bind:value={apiKey}
-        placeholder={provider === "openai" ? "sk-proj-..." : provider === "anthropic" ? "sk-ant-..." : "AI..."}
+        placeholder={provider === "openai" ? "sk-proj-..." : provider === "anthropic" ? "sk-ant-..." : provider === "openrouter" ? "sk-or-..." : "AI..."}
       />
       <button class="btn-secondary" onclick={saveApiKey} disabled={!apiKey.trim()}>Save</button>
       <button class="btn-secondary" onclick={testConnection} disabled={testingConnection}>
@@ -144,6 +154,19 @@
         <option value="claude">Claude</option>
         <option value="openai">OpenAI</option>
         <option value="gemini">Gemini</option>
+        <option value="generic">Generic</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- Default Image Platform -->
+  <section class="section">
+    <div class="section-label">Default image platform</div>
+    <div class="select-wrap">
+      <select bind:value={defaultImagePlatform}>
+        <option value="midjourney">Midjourney</option>
+        <option value="dalle">DALL-E</option>
+        <option value="stablediffusion">Stable Diffusion</option>
         <option value="generic">Generic</option>
       </select>
     </div>
@@ -236,7 +259,7 @@
 
   .provider-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
 
@@ -281,6 +304,7 @@
   /* ── Form elements ────────────────── */
 
   .select-wrap select,
+  .model-input,
   .key-row input {
     padding: 8px 12px;
     background: #0f0f12;
@@ -294,10 +318,15 @@
   }
 
   .select-wrap select:focus,
+  .model-input:focus,
   .key-row input:focus {
     outline: none;
     border-color: #10b981;
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.08);
+  }
+
+  .model-input {
+    margin-top: 6px;
   }
 
   .key-row {

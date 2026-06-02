@@ -152,10 +152,7 @@ pub fn usage_hint() {
         muted.apply_to("Fetch latest templates")
     );
     eprintln!();
-    eprintln!(
-        "  {}",
-        muted.apply_to("Run proompt --help for all options")
-    );
+    eprintln!("  {}", muted.apply_to("Run proompt --help for all options"));
     eprintln!();
 }
 
@@ -167,10 +164,9 @@ pub fn section_header(title: &str) {
     let width: usize = 50;
     let dash_count = width.saturating_sub(title.len() + 3);
     eprintln!(
-        "  {} {} {}",
+        "  {} {}",
         header.apply_to(format!("─ {}", title)),
-        muted.apply_to("─".repeat(dash_count)),
-        ""
+        muted.apply_to("─".repeat(dash_count))
     );
 }
 
@@ -201,9 +197,23 @@ pub fn enhanced_output(original: &str, enhanced: &str, summary: &str, platform: 
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max])
+    match s.char_indices().nth(max) {
+        Some((idx, _)) => format!("{}...", &s[..idx]),
+        None => s.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_handles_unicode_boundaries() {
+        assert_eq!(truncate("áéíóú", 3), "áéí...");
+    }
+
+    #[test]
+    fn truncate_leaves_short_unicode_unchanged() {
+        assert_eq!(truncate("🙂🙂", 2), "🙂🙂");
     }
 }

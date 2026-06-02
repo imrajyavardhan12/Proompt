@@ -9,12 +9,12 @@ pub fn build_prompts(
 
     let mut full_user_prompt = String::new();
 
-    if let Some(styles) = style_hints {
-        if !styles.is_empty() {
-            full_user_prompt.push_str("Style hints: ");
-            full_user_prompt.push_str(&styles.join(", "));
-            full_user_prompt.push_str("\n\n");
-        }
+    if let Some(styles) = style_hints
+        && !styles.is_empty()
+    {
+        full_user_prompt.push_str("Style hints: ");
+        full_user_prompt.push_str(&styles.join(", "));
+        full_user_prompt.push_str("\n\n");
     }
 
     full_user_prompt.push_str("Image idea: ");

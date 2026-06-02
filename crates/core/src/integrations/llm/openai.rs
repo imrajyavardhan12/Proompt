@@ -1,24 +1,61 @@
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
-use reqwest::Client;
+use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
 
 use super::{LlmRequest, LlmResponse, LlmUsage};
 
 const OPENAI_API_URL: &str = "https://api.openai.com/v1/chat/completions";
+const OPENROUTER_API_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_REFERER: &str = "https://github.com/proompt/proompt";
+const OPENROUTER_TITLE: &str = "Proompt";
 
-pub struct OpenAIClient {
+pub type OpenAIClient = OpenAICompatibleClient;
+
+pub struct OpenAICompatibleClient {
     client: Client,
     api_key: String,
     model: String,
+    api_url: &'static str,
+    provider_name: &'static str,
+    openrouter_headers: bool,
 }
 
-impl OpenAIClient {
+impl OpenAICompatibleClient {
     pub fn new(api_key: String, model: Option<String>) -> Self {
+        Self::with_endpoint(
+            api_key,
+            model.unwrap_or_else(|| "gpt-4o".to_string()),
+            OPENAI_API_URL,
+            "OpenAI",
+            false,
+        )
+    }
+
+    pub fn openrouter(api_key: String, model: Option<String>) -> Self {
+        Self::with_endpoint(
+            api_key,
+            model.unwrap_or_else(|| "openai/gpt-4o-mini".to_string()),
+            OPENROUTER_API_URL,
+            "OpenRouter",
+            true,
+        )
+    }
+
+    fn with_endpoint(
+        api_key: String,
+        model: String,
+        api_url: &'static str,
+        provider_name: &'static str,
+        openrouter_headers: bool,
+    ) -> Self {
         Self {
             client: Client::new(),
             api_key,
-            model: model.unwrap_or_else(|| "gpt-4o".to_string()),
+            model,
+            api_url,
+            provider_name,
+            openrouter_headers,
         }
     }
 
@@ -40,14 +77,11 @@ impl OpenAIClient {
         };
 
         let response = self
-            .client
-            .post(OPENAI_API_URL)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
+            .request_builder()
             .json(&body)
             .send()
             .await
-            .context("Failed to send request to OpenAI")?;
+            .with_context(|| format!("Failed to send request to {}", self.provider_name))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -55,13 +89,13 @@ impl OpenAIClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
-            anyhow::bail!("OpenAI API error ({}): {}", status, body);
+            anyhow::bail!("{} API error ({}): {}", self.provider_name, status, body);
         }
 
         let api_response: OpenAIResponse = response
             .json()
             .await
-            .context("Failed to parse OpenAI response")?;
+            .with_context(|| format!("Failed to parse {} response", self.provider_name))?;
 
         let content = api_response
             .choices
@@ -102,14 +136,11 @@ impl OpenAIClient {
         };
 
         let response = self
-            .client
-            .post(OPENAI_API_URL)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
+            .request_builder()
             .json(&body)
             .send()
             .await
-            .context("Failed to send request to OpenAI")?;
+            .with_context(|| format!("Failed to send request to {}", self.provider_name))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -117,7 +148,7 @@ impl OpenAIClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "unknown error".to_string());
-            anyhow::bail!("OpenAI API error ({}): {}", status, body);
+            anyhow::bail!("{} API error ({}): {}", self.provider_name, status, body);
         }
 
         let mut full_content = String::new();
@@ -128,7 +159,7 @@ impl OpenAIClient {
             let chunk = chunk.context("Stream error")?;
             buffer.push_str(&String::from_utf8_lossy(&chunk));
 
-            // Process complete SSE lines
+            // Process complete SSE lines.
             while let Some(line_end) = buffer.find('\n') {
                 let line = buffer[..line_end].trim().to_string();
                 buffer = buffer[line_end + 1..].to_string();
@@ -137,15 +168,13 @@ impl OpenAIClient {
                     continue;
                 }
 
-                if let Some(json_str) = line.strip_prefix("data: ") {
-                    if let Ok(chunk) = serde_json::from_str::<StreamChunk>(json_str) {
-                        if let Some(choice) = chunk.choices.first() {
-                            if let Some(content) = &choice.delta.content {
-                                on_token(content);
-                                full_content.push_str(content);
-                            }
-                        }
-                    }
+                if let Some(json_str) = line.strip_prefix("data: ")
+                    && let Ok(chunk) = serde_json::from_str::<StreamChunk>(json_str)
+                    && let Some(choice) = chunk.choices.first()
+                    && let Some(content) = &choice.delta.content
+                {
+                    on_token(content);
+                    full_content.push_str(content);
                 }
             }
         }
@@ -154,6 +183,22 @@ impl OpenAIClient {
             content: full_content,
             usage: None,
         })
+    }
+
+    fn request_builder(&self) -> RequestBuilder {
+        let builder = self
+            .client
+            .post(self.api_url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json");
+
+        if self.openrouter_headers {
+            builder
+                .header("HTTP-Referer", OPENROUTER_REFERER)
+                .header("X-Title", OPENROUTER_TITLE)
+        } else {
+            builder
+        }
     }
 }
 

@@ -110,24 +110,35 @@ pub async fn enhance(
         max_tokens: request.options.max_tokens.unwrap_or(2048),
     };
 
+    let provider = crate::config::normalize_provider(provider)
+        .ok_or_else(|| anyhow::anyhow!("Unsupported provider: {}", provider))?;
+
     let response = match provider {
         "openai" => {
             let client =
                 crate::integrations::llm::openai::OpenAIClient::new(api_key.to_string(), model);
             client.complete(llm_request).await?
         }
-        "google" | "gemini" => {
+        "openrouter" => {
+            let client = crate::integrations::llm::openai::OpenAIClient::openrouter(
+                api_key.to_string(),
+                model,
+            );
+            client.complete(llm_request).await?
+        }
+        "google" => {
             let client =
                 crate::integrations::llm::google::GoogleClient::new(api_key.to_string(), model);
             client.complete(llm_request).await?
         }
-        _ => {
+        "anthropic" => {
             let client = crate::integrations::llm::anthropic::AnthropicClient::new(
                 api_key.to_string(),
                 model,
             );
             client.complete(llm_request).await?
         }
+        _ => unreachable!("provider was normalized before matching"),
     };
 
     let changes_summary = build_changes_summary(
@@ -146,7 +157,7 @@ pub async fn enhance(
 }
 
 /// Streaming enhancement - calls `on_token` for each token as it arrives.
-/// Only supported with the OpenAI provider; other providers fall back to non-streaming.
+/// OpenAI-compatible providers stream tokens; other providers fall back to batch completion.
 pub async fn enhance_stream(
     request: EnhanceRequest,
     provider: &str,
@@ -178,32 +189,35 @@ pub async fn enhance_stream(
         max_tokens: request.options.max_tokens.unwrap_or(2048),
     };
 
+    let provider = crate::config::normalize_provider(provider)
+        .ok_or_else(|| anyhow::anyhow!("Unsupported provider: {}", provider))?;
+
     let response = match provider {
         "openai" => {
             let client =
                 crate::integrations::llm::openai::OpenAIClient::new(api_key.to_string(), model);
             client.stream(llm_request, on_token).await?
         }
-        _ => {
-            // Non-streaming fallback for other providers
-            let response = match provider {
-                "google" | "gemini" => {
-                    let client = crate::integrations::llm::google::GoogleClient::new(
-                        api_key.to_string(),
-                        model,
-                    );
-                    client.complete(llm_request).await?
-                }
-                _ => {
-                    let client = crate::integrations::llm::anthropic::AnthropicClient::new(
-                        api_key.to_string(),
-                        model,
-                    );
-                    client.complete(llm_request).await?
-                }
-            };
-            response
+        "openrouter" => {
+            let client = crate::integrations::llm::openai::OpenAIClient::openrouter(
+                api_key.to_string(),
+                model,
+            );
+            client.stream(llm_request, on_token).await?
         }
+        "google" => {
+            let client =
+                crate::integrations::llm::google::GoogleClient::new(api_key.to_string(), model);
+            client.complete(llm_request).await?
+        }
+        "anthropic" => {
+            let client = crate::integrations::llm::anthropic::AnthropicClient::new(
+                api_key.to_string(),
+                model,
+            );
+            client.complete(llm_request).await?
+        }
+        _ => unreachable!("provider was normalized before matching"),
     };
 
     let changes_summary = build_changes_summary(
@@ -219,4 +233,29 @@ pub async fn enhance_stream(
         context_used: supermemory_context,
         platform: request.platform,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn enhance_rejects_unknown_provider_before_network_call() {
+        let request = EnhanceRequest {
+            prompt: "make this clearer".to_string(),
+            platform: Platform::Generic,
+            enhancement_type: EnhanceType::Text,
+            options: EnhanceOptions::default(),
+        };
+
+        let result = enhance(request, "unknown-provider", "test-key", None, None).await;
+
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unsupported provider")
+        );
+    }
 }

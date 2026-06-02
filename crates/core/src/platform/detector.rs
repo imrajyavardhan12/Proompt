@@ -1,8 +1,8 @@
 use super::Platform;
 
-pub fn detect_platform(input: &str) -> Platform {
-    let lower = input.to_lowercase();
-    match lower.as_str() {
+pub fn parse_platform(input: &str) -> Option<Platform> {
+    let lower = input.trim().to_lowercase();
+    Some(match lower.as_str() {
         "claude" | "anthropic" => Platform::Claude,
         "openai" | "gpt" | "chatgpt" => Platform::OpenAI,
         "gemini" | "google" => Platform::Gemini,
@@ -11,8 +11,13 @@ pub fn detect_platform(input: &str) -> Platform {
         "sd" | "stablediffusion" | "stable-diffusion" | "stable_diffusion" => {
             Platform::StableDiffusion
         }
-        _ => Platform::Generic,
-    }
+        "generic" => Platform::Generic,
+        _ => return None,
+    })
+}
+
+pub fn detect_platform(input: &str) -> Platform {
+    parse_platform(input).unwrap_or(Platform::Generic)
 }
 
 #[cfg(test)]
@@ -37,6 +42,12 @@ mod tests {
     fn test_detect_unknown_defaults_to_generic() {
         assert_eq!(detect_platform("unknown"), Platform::Generic);
         assert_eq!(detect_platform("foobar"), Platform::Generic);
+    }
+
+    #[test]
+    fn test_parse_platform_rejects_unknown() {
+        assert_eq!(parse_platform("generic"), Some(Platform::Generic));
+        assert_eq!(parse_platform("unknown"), None);
     }
 
     #[test]

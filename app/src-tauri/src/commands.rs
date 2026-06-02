@@ -4,7 +4,7 @@ use proompt_core::{
     config::{self as cfg, Mode},
     enhance::{self, EnhanceOptions, EnhanceRequest},
     integrations::supermemory::SuperMemoryClient,
-    platform::{EnhanceType, detect_platform},
+    platform::{EnhanceType, Platform, parse_platform},
     templates::{Template, TemplateFilter, TemplateManager},
 };
 use tauri::AppHandle;
@@ -20,7 +20,10 @@ pub async fn enhance_prompt(
 ) -> Result<String, String> {
     let config = cfg::load_config().map_err(|e| e.to_string())?;
 
-    let platform = detect_platform(&platform);
+    let platform = parse_platform(&platform).ok_or_else(|| {
+        "Invalid platform. Use claude, openai, gemini, generic, midjourney, dalle, or sd."
+            .to_string()
+    })?;
     let enhancement_type = match enhance_type.as_str() {
         "image" => EnhanceType::Image,
         _ => EnhanceType::Text,
@@ -109,6 +112,7 @@ pub fn save_settings(
     provider: String,
     model: Option<String>,
     default_platform: String,
+    default_image_platform: Option<String>,
     supermemory_enabled: bool,
 ) -> Result<(), String> {
     let mut config = cfg::load_config().map_err(|e| e.to_string())?;
@@ -116,11 +120,32 @@ pub fn save_settings(
         "hosted" => Mode::Hosted,
         _ => Mode::Byok,
     };
-    config.byok.provider = provider;
+    cfg::set_byok_provider(&mut config, &provider).map_err(|e| e.to_string())?;
     if let Some(m) = model {
         config.byok.model = m;
     }
-    config.default_platform = detect_platform(&default_platform);
+
+    let default_platform = parse_platform(&default_platform)
+        .ok_or_else(|| "Default platform must be claude, openai, gemini, or generic".to_string())?;
+    if !default_platform.is_text_platform() {
+        return Err("Default platform must be claude, openai, gemini, or generic".to_string());
+    }
+    config.default_platform = default_platform;
+
+    if let Some(default_image_platform) = default_image_platform {
+        let default_image_platform = parse_platform(&default_image_platform).ok_or_else(|| {
+            "Default image platform must be midjourney, dalle, sd, or generic".to_string()
+        })?;
+        if !default_image_platform.is_image_platform()
+            && default_image_platform != Platform::Generic
+        {
+            return Err(
+                "Default image platform must be midjourney, dalle, sd, or generic".to_string(),
+            );
+        }
+        config.default_image_platform = default_image_platform;
+    }
+
     config.supermemory.enabled = supermemory_enabled;
     cfg::save_config(&config).map_err(|e| e.to_string())
 }
@@ -144,6 +169,13 @@ pub async fn test_api_connection() -> Result<String, String> {
     let result = match config.byok.provider.as_str() {
         "openai" => {
             let client = proompt_core::integrations::llm::openai::OpenAIClient::new(
+                api_key,
+                Some(config.byok.model),
+            );
+            client.complete(request).await
+        }
+        "openrouter" => {
+            let client = proompt_core::integrations::llm::openai::OpenAIClient::openrouter(
                 api_key,
                 Some(config.byok.model),
             );

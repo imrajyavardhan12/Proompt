@@ -9,16 +9,16 @@ pub fn build_prompts(
 
     let mut full_user_prompt = String::new();
 
-    if let Some(memories) = context {
-        if !memories.is_empty() {
-            full_user_prompt.push_str("<user_context>\n");
-            for memory in memories {
-                full_user_prompt.push_str("- ");
-                full_user_prompt.push_str(memory);
-                full_user_prompt.push('\n');
-            }
-            full_user_prompt.push_str("</user_context>\n\n");
+    if let Some(memories) = context
+        && !memories.is_empty()
+    {
+        full_user_prompt.push_str("<user_context>\n");
+        for memory in memories {
+            full_user_prompt.push_str("- ");
+            full_user_prompt.push_str(memory);
+            full_user_prompt.push('\n');
         }
+        full_user_prompt.push_str("</user_context>\n\n");
     }
 
     full_user_prompt.push_str("<original_prompt>\n");

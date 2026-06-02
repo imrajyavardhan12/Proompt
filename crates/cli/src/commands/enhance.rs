@@ -5,7 +5,7 @@ use proompt_core::{
     config::{self as cfg, Mode},
     enhance::{EnhanceOptions, EnhanceRequest, enhance, enhance_stream},
     integrations::supermemory::SuperMemoryClient,
-    platform::{EnhanceType, detect_platform},
+    platform::{EnhanceType, parse_platform},
 };
 
 use crate::output;
@@ -38,7 +38,12 @@ pub async fn run(
     let config = cfg::load_config()?;
 
     let platform = if let Some(p) = platform_str {
-        detect_platform(p)
+        parse_platform(p).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Invalid platform '{}'. Use claude, openai, gemini, generic, midjourney, dalle, or sd.",
+                p
+            )
+        })?
     } else if is_image {
         config.default_image_platform
     } else {
@@ -59,10 +64,8 @@ pub async fn run(
         match fetch_supermemory_context(prompt, config.supermemory.context_limit).await {
             Ok(ctx) => {
                 if !ctx.is_empty() {
-                    sm_spinner.finish_with_message(format!(
-                        "Found {} relevant memories",
-                        ctx.len()
-                    ));
+                    sm_spinner
+                        .finish_with_message(format!("Found {} relevant memories", ctx.len()));
                 } else {
                     sm_spinner.finish_with_message("No relevant memories found");
                 }
@@ -102,7 +105,7 @@ pub async fn run(
     };
 
     let is_tty = io::stdout().is_terminal();
-    let use_streaming = config.byok.provider == "openai" && is_tty;
+    let use_streaming = matches!(config.byok.provider.as_str(), "openai" | "openrouter") && is_tty;
 
     if use_streaming {
         let spinner = output::spinner(&format!(
@@ -127,7 +130,9 @@ pub async fn run(
                     output::section_header("Original");
                     eprintln!(
                         "  {}",
-                        console::Style::new().dim().apply_to(truncate_str(&prompt_display, 120))
+                        console::Style::new()
+                            .dim()
+                            .apply_to(truncate_str(&prompt_display, 120))
                     );
                     eprintln!();
                     output::section_header("Enhanced");
@@ -181,17 +186,30 @@ pub async fn run(
 }
 
 fn truncate_str(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max])
+    match s.char_indices().nth(max) {
+        Some((idx, _)) => format!("{}...", &s[..idx]),
+        None => s.to_string(),
     }
 }
 
 async fn fetch_supermemory_context(prompt: &str, limit: u32) -> Result<Vec<String>> {
-    let api_key =
-        cfg::get_api_key("supermemory").context("SuperMemory API key not configured")?;
+    let api_key = cfg::get_api_key("supermemory").context("SuperMemory API key not configured")?;
     let client = SuperMemoryClient::new(api_key);
     let memories = client.search(prompt, limit).await?;
     Ok(memories.into_iter().map(|m| m.content).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_str_handles_unicode_boundaries() {
+        assert_eq!(truncate_str("áéíóú", 3), "áéí...");
+    }
+
+    #[test]
+    fn truncate_str_leaves_short_unicode_unchanged() {
+        assert_eq!(truncate_str("🙂🙂", 2), "🙂🙂");
+    }
 }

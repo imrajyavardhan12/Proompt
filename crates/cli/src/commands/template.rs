@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use console::Style;
-use proompt_core::templates::{
-    self, TemplateCategory, TemplateFilter, TemplateManager,
-};
+use proompt_core::templates::{self, TemplateCategory, TemplateFilter, TemplateManager};
 
 use crate::output;
 
@@ -50,10 +48,7 @@ pub fn list(trending_only: bool) -> Result<()> {
     }
 
     eprintln!();
-    eprintln!(
-        "  {} templates available",
-        accent.apply_to(templates.len())
-    );
+    eprintln!("  {} templates available", accent.apply_to(templates.len()));
     eprintln!();
     output::dim("  Usage: proompt --template <id> \"your subject\"");
     eprintln!();

@@ -10,20 +10,11 @@ pub struct TemplateManager {
     templates: Vec<Template>,
 }
 
+#[derive(Default)]
 pub struct TemplateFilter {
     pub category: Option<TemplateCategory>,
     pub platform: Option<Platform>,
     pub trending_only: bool,
-}
-
-impl Default for TemplateFilter {
-    fn default() -> Self {
-        Self {
-            category: None,
-            platform: None,
-            trending_only: false,
-        }
-    }
 }
 
 impl TemplateManager {
@@ -46,15 +37,15 @@ impl TemplateManager {
         self.templates
             .iter()
             .filter(|t| {
-                if let Some(cat) = filter.category {
-                    if t.category != cat {
-                        return false;
-                    }
+                if let Some(cat) = filter.category
+                    && t.category != cat
+                {
+                    return false;
                 }
-                if let Some(plat) = filter.platform {
-                    if t.platform != plat {
-                        return false;
-                    }
+                if let Some(plat) = filter.platform
+                    && t.platform != plat
+                {
+                    return false;
                 }
                 if filter.trending_only && !t.trending {
                     return false;
@@ -68,11 +59,7 @@ impl TemplateManager {
         self.templates.iter().find(|t| t.id == id)
     }
 
-    pub fn apply(
-        &self,
-        id: &str,
-        fields: &HashMap<String, String>,
-    ) -> Result<String> {
+    pub fn apply(&self, id: &str, fields: &HashMap<String, String>) -> Result<String> {
         let template = self
             .get(id)
             .context(format!("Template '{}' not found", id))?;
@@ -89,6 +76,12 @@ impl TemplateManager {
         }
 
         Ok(result)
+    }
+}
+
+impl Default for TemplateManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -127,10 +120,7 @@ pub async fn sync_templates_from_remote(url: &str) -> Result<Vec<Template>> {
         .context("Failed to fetch remote templates")?;
 
     if !response.status().is_success() {
-        anyhow::bail!(
-            "Failed to fetch templates: HTTP {}",
-            response.status()
-        );
+        anyhow::bail!("Failed to fetch templates: HTTP {}", response.status());
     }
 
     let templates: Vec<Template> = response
@@ -164,7 +154,11 @@ mod tests {
             category: Some(TemplateCategory::Image),
             ..Default::default()
         });
-        assert!(image_templates.iter().all(|t| t.category == TemplateCategory::Image));
+        assert!(
+            image_templates
+                .iter()
+                .all(|t| t.category == TemplateCategory::Image)
+        );
     }
 
     #[test]
