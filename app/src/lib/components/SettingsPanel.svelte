@@ -14,13 +14,50 @@
   let saving = $state(false);
 
   const providers = [
-    { id: "openai", label: "OpenAI", desc: "GPT-4o, o1, o3", models: ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini"] },
-    { id: "anthropic", label: "Anthropic", desc: "Claude Sonnet, Haiku", models: ["claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"] },
-    { id: "google", label: "Google", desc: "Gemini 2.0, 1.5", models: ["gemini-2.0-flash", "gemini-2.0-pro", "gemini-1.5-flash"] },
-    { id: "openrouter", label: "OpenRouter", desc: "Claude, GPT, Gemini, OSS", models: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "google/gemini-2.0-flash-001", "meta-llama/llama-3.1-8b-instruct"] },
+    {
+      id: "openai",
+      label: "OpenAI",
+      desc: "GPT-4o, o1, o3",
+      models: ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini"],
+      keyPlaceholder: "sk-proj-...",
+      envVar: "OPENAI_API_KEY",
+      cliCommand: "proompt config set openai.api_key YOUR_KEY",
+      modelHint: "OpenAI models usually start with gpt, chatgpt, o1, o3, or o4.",
+    },
+    {
+      id: "anthropic",
+      label: "Anthropic",
+      desc: "Claude Sonnet, Haiku",
+      models: ["claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"],
+      keyPlaceholder: "sk-ant-...",
+      envVar: "ANTHROPIC_API_KEY",
+      cliCommand: "proompt config set anthropic.api_key YOUR_KEY",
+      modelHint: "Anthropic models should start with claude.",
+    },
+    {
+      id: "google",
+      label: "Google",
+      desc: "Gemini 2.0, 1.5",
+      models: ["gemini-2.0-flash", "gemini-2.0-pro", "gemini-1.5-flash"],
+      keyPlaceholder: "AI...",
+      envVar: "GEMINI_API_KEY",
+      cliCommand: "proompt config set google.api_key YOUR_KEY",
+      modelHint: "Google models should start with gemini.",
+    },
+    {
+      id: "openrouter",
+      label: "OpenRouter",
+      desc: "Claude, GPT, Gemini, OSS",
+      models: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "google/gemini-2.0-flash-001", "meta-llama/llama-3.1-8b-instruct"],
+      keyPlaceholder: "sk-or-...",
+      envVar: "OPENROUTER_API_KEY",
+      cliCommand: "proompt config set openrouter.api_key YOUR_KEY",
+      modelHint: "OpenRouter model ids must look like provider/model-id, for example openai/gpt-4o-mini.",
+    },
   ];
 
   let currentProvider = $derived(providers.find((p) => p.id === provider) ?? providers[0]);
+  let modelError = $derived(validateModel(provider, model));
 
   async function loadConfig() {
     try {
@@ -67,10 +104,37 @@
     } catch (e: any) { showStatus("error", `${e}`); }
   }
 
+  function validateModel(providerId: string, modelId: string) {
+    const trimmed = modelId.trim();
+    if (!trimmed) return "Model is required";
+    if (providerId === "openrouter") {
+      const [modelProvider, modelName] = trimmed.split("/", 2);
+      if (!modelProvider || !modelName) return "OpenRouter model must use provider/model-id format";
+    }
+    if (providerId === "anthropic" && !trimmed.toLowerCase().startsWith("claude")) {
+      return "Anthropic model must start with claude";
+    }
+    if (providerId === "google" && !trimmed.toLowerCase().startsWith("gemini")) {
+      return "Google model must start with gemini";
+    }
+    if (providerId === "openai" && !/^(gpt|chatgpt|o1|o3|o4)/i.test(trimmed)) {
+      return "OpenAI model must start with gpt, chatgpt, o1, o3, or o4";
+    }
+    return "";
+  }
+
   async function testConnection() {
+    if (modelError) {
+      showStatus("error", modelError);
+      return;
+    }
     testingConnection = true;
     try {
-      const result = await invoke<string>("test_api_connection");
+      const result = await invoke<string>("test_api_connection", {
+        provider,
+        model,
+        apiKey: apiKey.trim() || null,
+      });
       showStatus("success", result);
     } catch (e: any) {
       showStatus("error", `${e}`);
@@ -78,6 +142,10 @@
   }
 
   async function saveConfig() {
+    if (modelError) {
+      showStatus("error", modelError);
+      return;
+    }
     saving = true;
     try {
       await invoke("save_settings", { mode, provider, model, defaultPlatform, defaultImagePlatform, supermemoryEnabled });
@@ -126,7 +194,10 @@
       bind:value={model}
       placeholder={provider === "openrouter" ? "provider/model-id" : "Custom model id"}
     />
-    <p class="hint">Choose a recommended model or type a custom model id.</p>
+    <p class="hint">{currentProvider.modelHint}</p>
+    {#if modelError}
+      <p class="field-error">{modelError}</p>
+    {/if}
   </section>
 
   <!-- API Key -->
@@ -136,14 +207,24 @@
       <input
         type="password"
         bind:value={apiKey}
-        placeholder={provider === "openai" ? "sk-proj-..." : provider === "anthropic" ? "sk-ant-..." : provider === "openrouter" ? "sk-or-..." : "AI..."}
+        placeholder={currentProvider.keyPlaceholder}
       />
       <button class="btn-secondary" onclick={saveApiKey} disabled={!apiKey.trim()}>Save</button>
-      <button class="btn-secondary" onclick={testConnection} disabled={testingConnection}>
+      <button class="btn-secondary" onclick={testConnection} disabled={testingConnection || !!modelError}>
         {testingConnection ? "..." : "Test"}
       </button>
     </div>
-    <p class="hint">Stored in your OS keychain. Never leaves your machine except to the provider.</p>
+    <div class="setup-guide">
+      <div class="setup-row">
+        <span>CLI</span>
+        <code>{currentProvider.cliCommand}</code>
+      </div>
+      <div class="setup-row">
+        <span>Env</span>
+        <code>export {currentProvider.envVar}=...</code>
+      </div>
+    </div>
+    <p class="hint">Stored in your OS keychain. Paste a key above to test it before saving.</p>
   </section>
 
   <!-- Default Platform -->
@@ -194,7 +275,7 @@
     {/if}
   </section>
 
-  <button class="btn-primary full-width" onclick={saveConfig} disabled={saving}>
+  <button class="btn-primary full-width" onclick={saveConfig} disabled={saving || !!modelError}>
     {saving ? "Saving..." : "Save settings"}
   </button>
 
@@ -343,6 +424,52 @@
     font-size: 11px;
     color: #3f3f46;
     margin: 0;
+  }
+
+  .field-error {
+    font-size: 11px;
+    color: #f87171;
+    margin: 0;
+  }
+
+  .setup-guide {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    background: #0f0f12;
+    border: 1px solid #1a1a1e;
+    border-radius: 8px;
+  }
+
+  .setup-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .setup-row span {
+    width: 28px;
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #52525b;
+  }
+
+  code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 3px 6px;
+    background: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 5px;
+    color: #a1a1aa;
+    font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+    font-size: 10.5px;
   }
 
   /* ── Buttons ──────────────────────── */

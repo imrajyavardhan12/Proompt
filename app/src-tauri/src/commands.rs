@@ -74,9 +74,15 @@ pub fn save_settings(
         _ => Mode::Byok,
     };
     cfg::set_byok_provider(&mut config, &provider).map_err(|e| e.to_string())?;
-    if let Some(m) = model {
-        config.byok.model = m;
+    let model = model.unwrap_or_else(|| config.byok.model.clone());
+    let model = model.trim().to_string();
+    if model.is_empty() {
+        return Err("Model is required".to_string());
     }
+    if !cfg::model_matches_provider(&model, &config.byok.provider) {
+        return Err(model_validation_message(&config.byok.provider));
+    }
+    config.byok.model = model;
 
     let default_platform = parse_platform(&default_platform)
         .ok_or_else(|| "Default platform must be claude, openai, gemini, or generic".to_string())?;
@@ -109,9 +115,40 @@ pub fn set_api_key(service: String, key: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn test_api_connection() -> Result<String, String> {
+pub async fn test_api_connection(
+    provider: Option<String>,
+    model: Option<String>,
+    api_key: Option<String>,
+) -> Result<String, String> {
     let config = cfg::load_config().map_err(|e| e.to_string())?;
-    let api_key = cfg::get_api_key(&config.byok.provider).map_err(|e| e.to_string())?;
+    let provider = match provider {
+        Some(provider) => cfg::normalize_provider(&provider)
+            .ok_or_else(|| "Provider must be openai, anthropic, google, or openrouter".to_string())?
+            .to_string(),
+        None => config.byok.provider.clone(),
+    };
+
+    let model = model.unwrap_or_else(|| {
+        if cfg::model_matches_provider(&config.byok.model, &provider) {
+            config.byok.model.clone()
+        } else {
+            cfg::default_model_for_provider(&provider)
+                .unwrap_or("gpt-4o")
+                .to_string()
+        }
+    });
+    let model = model.trim().to_string();
+    if model.is_empty() {
+        return Err("Model is required".to_string());
+    }
+    if !cfg::model_matches_provider(&model, &provider) {
+        return Err(model_validation_message(&provider));
+    }
+
+    let api_key = match api_key.map(|key| key.trim().to_string()) {
+        Some(key) if !key.is_empty() => key,
+        _ => cfg::get_api_key(&provider).map_err(|e| e.to_string())?,
+    };
 
     let request = proompt_core::integrations::llm::LlmRequest {
         system_prompt: "Respond with only: OK".to_string(),
@@ -119,40 +156,55 @@ pub async fn test_api_connection() -> Result<String, String> {
         max_tokens: 10,
     };
 
-    let result = match config.byok.provider.as_str() {
+    let result = match provider.as_str() {
         "openai" => {
             let client = proompt_core::integrations::llm::openai::OpenAIClient::new(
                 api_key,
-                Some(config.byok.model),
+                Some(model.clone()),
             );
             client.complete(request).await
         }
         "openrouter" => {
             let client = proompt_core::integrations::llm::openai::OpenAIClient::openrouter(
                 api_key,
-                Some(config.byok.model),
+                Some(model.clone()),
             );
             client.complete(request).await
         }
-        "google" | "gemini" => {
+        "google" => {
             let client = proompt_core::integrations::llm::google::GoogleClient::new(
                 api_key,
-                Some(config.byok.model),
+                Some(model.clone()),
             );
             client.complete(request).await
         }
-        _ => {
+        "anthropic" => {
             let client = proompt_core::integrations::llm::anthropic::AnthropicClient::new(
                 api_key,
-                Some(config.byok.model),
+                Some(model.clone()),
             );
             client.complete(request).await
         }
+        _ => unreachable!("provider was normalized before matching"),
     };
 
     result
-        .map(|_| "Connection successful!".to_string())
+        .map(|_| format!("Connection successful via {} / {}", provider, model))
         .map_err(|e| e.to_string())
+}
+
+fn model_validation_message(provider: &str) -> String {
+    match cfg::normalize_provider(provider) {
+        Some(cfg::OPENAI_PROVIDER) => {
+            "OpenAI model must start with gpt, chatgpt, o1, o3, or o4".to_string()
+        }
+        Some(cfg::ANTHROPIC_PROVIDER) => "Anthropic model must start with claude".to_string(),
+        Some(cfg::GOOGLE_PROVIDER) => "Google model must start with gemini".to_string(),
+        Some(cfg::OPENROUTER_PROVIDER) => {
+            "OpenRouter model must use provider/model-id format".to_string()
+        }
+        _ => "Unsupported provider".to_string(),
+    }
 }
 
 #[tauri::command]
