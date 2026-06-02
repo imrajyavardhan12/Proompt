@@ -60,7 +60,7 @@
     </div>
 
     <div class="sidebar-bottom">
-      <div class="version">v0.1.0</div>
+      <div class="version">v0.1.1</div>
     </div>
   </aside>
 
