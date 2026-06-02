@@ -117,22 +117,33 @@ The core library is shared between CLI and desktop app. Both are thin wrappers c
 
 ## Tech stack
 
-Rust, Tauri 2, Svelte 5, Vite, OpenAI/Anthropic/Google APIs.
+Rust, Tauri 2, Svelte 5, Vite, OpenAI/Anthropic/Google/OpenRouter APIs.
 
 Config stored as TOML at `~/.config/proompt/config.toml`.
 
 ## Running tests
 
 ```bash
-cargo test                         # all 19 tests
+cargo test                         # all tests
 cargo test -p proompt-core         # core library only
 ```
 
+## Releasing
+
+GitHub Actions publishes release assets when a `v*` tag is pushed:
+
+```bash
+git tag v0.1.0
+git push origin main --tags
+```
+
+The release workflow builds CLI archives for Linux/macOS/Windows and a macOS desktop `.dmg`.
+
 ## Status
 
-Milestones 1 and 2 are complete -- core engine, multi-provider support, streaming, CLI with animations, desktop app with full UI. 19 tests passing.
+Milestones 1 and 2 are complete -- core engine, multi-provider support, OpenRouter, streaming, CLI with animations, desktop app with full UI, and CI. 43 tests passing.
 
-Not yet built: Supabase auth, Stripe billing, SuperMemory integration, CI/CD, code signing.
+Not yet built: Supabase auth, Stripe billing, hosted mode, code signing.
 
 ## License
 
