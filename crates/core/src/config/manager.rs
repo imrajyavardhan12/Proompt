@@ -89,6 +89,13 @@ pub fn get_api_key(service: &str) -> Result<String> {
         return Ok(key);
     }
 
+    if keychain_disabled() {
+        anyhow::bail!(
+            "API key not found for '{}'; keychain lookup disabled by PROOMPT_DISABLE_KEYCHAIN",
+            service
+        );
+    }
+
     // 2. Fall back to OS keychain. Google previously used both "google" and
     // "gemini" service names, so read both for backwards compatibility.
     let candidates = match service.as_str() {
@@ -117,6 +124,12 @@ pub fn get_api_key(service: &str) -> Result<String> {
         service,
         last_error.unwrap_or_else(|| "not found".to_string())
     ))
+}
+
+fn keychain_disabled() -> bool {
+    std::env::var("PROOMPT_DISABLE_KEYCHAIN")
+        .map(|value| matches!(value.to_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
 }
 
 pub fn set_api_key(service: &str, key: &str) -> Result<()> {
