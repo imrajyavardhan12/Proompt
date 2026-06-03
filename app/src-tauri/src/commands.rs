@@ -9,6 +9,10 @@ use proompt_core::{
 use serde::Serialize;
 use tauri::AppHandle;
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_notification::NotificationExt;
+
+const DEFAULT_QUICK_ENHANCE_HOTKEY: &str = "CmdOrCtrl+Shift+E";
 
 #[derive(Debug, Serialize)]
 pub struct ProviderSetupStatus {
@@ -19,6 +23,44 @@ pub struct ProviderSetupStatus {
     pub api_key_error: Option<String>,
     pub env_var: String,
     pub cli_command: String,
+}
+
+pub fn register_quick_enhance_shortcut(app: &AppHandle) {
+    let hotkey = cfg::load_config()
+        .map(|config| config.hotkeys.quick_enhance)
+        .unwrap_or_else(|_| DEFAULT_QUICK_ENHANCE_HOTKEY.to_string());
+    let hotkey = if hotkey.trim().is_empty() {
+        DEFAULT_QUICK_ENHANCE_HOTKEY.to_string()
+    } else {
+        hotkey
+    };
+
+    let result = app
+        .global_shortcut()
+        .on_shortcut(hotkey.as_str(), |app, _shortcut, event| {
+            if event.state != ShortcutState::Pressed {
+                return;
+            }
+
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = quick_enhance_clipboard_with_notifications(app.clone()).await {
+                    notify(
+                        &app,
+                        "Proompt quick enhance failed",
+                        &friendly_quick_enhance_error(&e.to_string()),
+                    );
+                }
+            });
+        });
+
+    if let Err(e) = result {
+        notify(
+            app,
+            "Proompt hotkey unavailable",
+            &format!("Could not register {}: {}", hotkey, e),
+        );
+    }
 }
 
 #[tauri::command]
@@ -46,6 +88,59 @@ pub async fn enhance_prompt(
     .map_err(|e| e.to_string())?;
 
     Ok(result.response.enhanced_prompt)
+}
+
+#[tauri::command]
+pub async fn quick_enhance_clipboard(app: AppHandle) -> Result<String, String> {
+    quick_enhance_clipboard_inner(app)
+        .await
+        .map_err(|e| friendly_quick_enhance_error(&e.to_string()))
+}
+
+async fn quick_enhance_clipboard_with_notifications(app: AppHandle) -> anyhow::Result<String> {
+    notify(&app, "Proompt", "Enhancing clipboard prompt...");
+    let enhanced_prompt = quick_enhance_clipboard_inner(app.clone()).await?;
+    notify(&app, "Proompt", "Enhanced prompt copied to clipboard.");
+    Ok(enhanced_prompt)
+}
+
+async fn quick_enhance_clipboard_inner(app: AppHandle) -> anyhow::Result<String> {
+    let prompt = app.clipboard().read_text()?;
+    if prompt.trim().is_empty() {
+        anyhow::bail!("Clipboard is empty. Copy a rough prompt first.");
+    }
+
+    let result = enhance_with_config(ConfiguredEnhanceRequest {
+        prompt,
+        platform: None,
+        enhancement_type: Some(EnhanceType::Text),
+        include_memory: false,
+        style_hints: None,
+        max_tokens: None,
+    })
+    .await?;
+
+    let enhanced_prompt = result.response.enhanced_prompt;
+    app.clipboard().write_text(&enhanced_prompt)?;
+    Ok(enhanced_prompt)
+}
+
+fn notify(app: &AppHandle, title: &str, body: &str) {
+    let _ = app.notification().builder().title(title).body(body).show();
+}
+
+fn friendly_quick_enhance_error(message: &str) -> String {
+    let lower = message.to_lowercase();
+    if lower.contains("api key not configured")
+        || lower.contains("failed to get api key")
+        || lower.contains("api key not found")
+    {
+        "Add a provider API key in Settings before using quick enhance.".to_string()
+    } else if lower.contains("hosted mode") {
+        "Hosted mode is coming soon. Switch to BYOK mode in Settings.".to_string()
+    } else {
+        message.to_string()
+    }
 }
 
 #[tauri::command]
