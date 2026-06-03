@@ -46,6 +46,21 @@ pub fn show() -> Result<()> {
     );
 
     eprintln!();
+    output::section_header("Preferences");
+    eprintln!();
+
+    let history_status = if config.preferences.save_history {
+        Style::new().green().apply_to("enabled").to_string()
+    } else {
+        Style::new().dim().apply_to("disabled").to_string()
+    };
+    eprintln!(
+        "  {} {}",
+        muted.apply_to("save history:    "),
+        history_status
+    );
+
+    eprintln!();
     output::section_header("Integrations");
     eprintln!();
 
@@ -144,6 +159,9 @@ pub fn set(key: &str, value: &str) -> Result<()> {
         }
         "preferences.telemetry" => {
             config.preferences.telemetry = value.parse().unwrap_or(false);
+        }
+        "preferences.save_history" => {
+            config.preferences.save_history = value.parse().unwrap_or(true);
         }
         _ => anyhow::bail!("Unknown config key: {}", key),
     }

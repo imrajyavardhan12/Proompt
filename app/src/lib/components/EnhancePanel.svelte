@@ -9,6 +9,13 @@
     };
   }
 
+  interface EnhanceDraft {
+    id: string;
+    prompt: string;
+    platform: string;
+    mode: "text" | "image";
+  }
+
   interface ProviderSetupStatus {
     mode: "byok" | "hosted";
     provider: string;
@@ -19,7 +26,10 @@
     cli_command: string;
   }
 
-  let { onOpenSettings = () => {} } = $props<{ onOpenSettings?: (providerHint?: string) => void }>();
+  let { onOpenSettings = () => {}, draft = null } = $props<{
+    onOpenSettings?: (providerHint?: string) => void;
+    draft?: EnhanceDraft | null;
+  }>();
 
   let prompt = $state("");
   let enhancedPrompt = $state("");
@@ -37,6 +47,7 @@
   let quickEnhanceHotkey = $state("CmdOrCtrl+Shift+E");
   let providerSetup = $state<ProviderSetupStatus | null>(null);
   let setupStatusLoading = $state(true);
+  let appliedDraftId = $state<string | null>(null);
 
   const textPlatforms = [
     { id: "claude", label: "Claude" },
@@ -113,12 +124,12 @@
       defaultTextPlatform = config.default_platform?.toLowerCase() || "claude";
       defaultImagePlatform = config.default_image_platform?.toLowerCase() || "midjourney";
       quickEnhanceHotkey = config.hotkeys?.quick_enhance || "CmdOrCtrl+Shift+E";
-      platform = defaultTextPlatform;
+      if (!draft) platform = defaultTextPlatform;
     } catch {
       defaultTextPlatform = "claude";
       defaultImagePlatform = "midjourney";
       quickEnhanceHotkey = "CmdOrCtrl+Shift+E";
-      platform = "claude";
+      if (!draft) platform = "claude";
     }
   }
 
@@ -136,6 +147,19 @@
   $effect(() => {
     loadConfigDefaults();
     loadProviderSetup();
+  });
+
+  $effect(() => {
+    if (draft && draft.id !== appliedDraftId) {
+      prompt = draft.prompt;
+      mode = draft.mode;
+      platform = draft.platform;
+      enhancedPrompt = "";
+      error = "";
+      copied = false;
+      selectedStyles = new Set();
+      appliedDraftId = draft.id;
+    }
   });
 
   $effect(() => {

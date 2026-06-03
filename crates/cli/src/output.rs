@@ -142,6 +142,11 @@ pub fn usage_hint() {
         muted.apply_to("Update a setting")
     );
     eprintln!(
+        "    {}             {}",
+        accent.apply_to("proompt history list"),
+        muted.apply_to("Browse local prompt history")
+    );
+    eprintln!(
         "    {}           {}",
         accent.apply_to("proompt templates list"),
         muted.apply_to("Browse viral templates")

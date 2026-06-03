@@ -75,16 +75,18 @@ echo "explain rust ownership" | proompt
 # configuration
 proompt config show
 proompt config set byok.provider anthropic
+proompt history list
 proompt templates list
 ```
 
 ### Desktop app
 
-Three tabs: Enhance, Templates, Settings.
+Four tabs: Enhance, History, Templates, Settings.
 
 - Pick text or image mode, choose a target platform, type your prompt, hit Enhance
+- Review local prompt history, favorite useful prompts, copy enhanced output, or reuse originals
 - Browse 10 built-in templates for common tasks (code review, Ghibli-style images, etc.)
-- Settings has provider/model switching, API key management, and connection testing
+- Settings has provider/model switching, API key management, local history controls, and connection testing
 
 ## Providers
 
@@ -108,6 +110,14 @@ proompt config set openrouter.api_key YOUR_KEY      # stores OpenRouter key
 ```
 
 Environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) work as a fallback.
+
+## Local history
+
+Successful enhancements are saved locally on your device so you can search, favorite, copy, and reuse previous prompts. Disable this anytime:
+
+```bash
+proompt config set preferences.save_history false
+```
 
 ## Project structure
 
@@ -150,7 +160,7 @@ The release workflow builds CLI archives for Linux/macOS/Windows and a macOS App
 
 ## Status
 
-Milestones 1 and 2 are complete -- core engine, multi-provider support, OpenRouter, streaming, CLI with animations, desktop app with full UI, and CI. 43 tests passing.
+Milestones 1 and 2 are complete -- core engine, multi-provider support, OpenRouter, streaming, CLI with animations, desktop app with full UI, local history, and CI. 53 tests passing.
 
 Not yet built: Supabase auth, Stripe billing, hosted mode, code signing.
 

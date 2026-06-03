@@ -1,14 +1,28 @@
 <script lang="ts">
   import EnhancePanel from "./lib/components/EnhancePanel.svelte";
+  import HistoryPanel from "./lib/components/HistoryPanel.svelte";
   import TemplatesPanel from "./lib/components/TemplatesPanel.svelte";
   import SettingsPanel from "./lib/components/SettingsPanel.svelte";
 
-  let activeTab = $state<"enhance" | "templates" | "settings">("enhance");
+  interface EnhanceDraft {
+    id: string;
+    prompt: string;
+    platform: string;
+    mode: "text" | "image";
+  }
+
+  let activeTab = $state<"enhance" | "history" | "templates" | "settings">("enhance");
   let settingsProviderHint = $state<string | null>(null);
+  let enhanceDraft = $state<EnhanceDraft | null>(null);
 
   function openSettings(providerHint?: string) {
     settingsProviderHint = providerHint ?? null;
     activeTab = "settings";
+  }
+
+  function reuseHistoryDraft(draft: EnhanceDraft) {
+    enhanceDraft = draft;
+    activeTab = "enhance";
   }
 </script>
 
@@ -37,6 +51,18 @@
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
           </svg>
           <span>Enhance</span>
+        </button>
+        <button
+          class="nav-item"
+          class:active={activeTab === "history"}
+          onclick={() => (activeTab = "history")}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3v5h5"/>
+            <path d="M3.05 13A9 9 0 1 0 5 5.3L3 8"/>
+            <path d="M12 7v5l3 2"/>
+          </svg>
+          <span>History</span>
         </button>
         <button
           class="nav-item"
@@ -73,7 +99,9 @@
   <main class="main">
     <div class="main-inner">
       {#if activeTab === "enhance"}
-        <EnhancePanel onOpenSettings={openSettings} />
+        <EnhancePanel onOpenSettings={openSettings} draft={enhanceDraft} />
+      {:else if activeTab === "history"}
+        <HistoryPanel onReuse={reuseHistoryDraft} />
       {:else if activeTab === "templates"}
         <TemplatesPanel />
       {:else if activeTab === "settings"}

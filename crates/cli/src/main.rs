@@ -44,6 +44,11 @@ enum Commands {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    /// Manage local prompt history
+    History {
+        #[command(subcommand)]
+        action: HistoryAction,
+    },
     /// Manage templates
     Templates {
         #[command(subcommand)]
@@ -69,6 +74,34 @@ enum ConfigAction {
 }
 
 #[derive(Subcommand)]
+enum HistoryAction {
+    /// List saved prompt history
+    List {
+        /// Maximum number of records to show
+        #[arg(short, long, default_value_t = 20)]
+        limit: usize,
+        /// Show only favorites
+        #[arg(long)]
+        favorites: bool,
+    },
+    /// Mark a history record as favorite
+    Favorite {
+        /// History record ID
+        id: String,
+        /// Remove favorite instead of adding it
+        #[arg(long)]
+        unset: bool,
+    },
+    /// Delete a history record
+    Delete {
+        /// History record ID
+        id: String,
+    },
+    /// Clear all prompt history
+    Clear,
+}
+
+#[derive(Subcommand)]
 enum TemplateAction {
     /// List available templates
     List {
@@ -90,6 +123,12 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Config { action }) => match action {
             ConfigAction::Show => commands::config::show()?,
             ConfigAction::Set { key, value } => commands::config::set(&key, &value)?,
+        },
+        Some(Commands::History { action }) => match action {
+            HistoryAction::List { limit, favorites } => commands::history::list(limit, favorites)?,
+            HistoryAction::Favorite { id, unset } => commands::history::favorite(&id, unset)?,
+            HistoryAction::Delete { id } => commands::history::delete(&id)?,
+            HistoryAction::Clear => commands::history::clear()?,
         },
         Some(Commands::Templates { action }) => match action {
             TemplateAction::List { trending } => commands::template::list(trending)?,
