@@ -209,13 +209,7 @@ fn normalize_style_hints(style_hints: Option<Vec<String>>) -> Option<Vec<String>
 fn provider_api_key(config: &Config, provider: &str) -> Result<String> {
     match config.mode {
         Mode::Byok => cfg::get_api_key(provider).with_context(|| {
-            let env_var = match provider {
-                cfg::OPENAI_PROVIDER => "OPENAI_API_KEY",
-                cfg::ANTHROPIC_PROVIDER => "ANTHROPIC_API_KEY",
-                cfg::GOOGLE_PROVIDER => "GEMINI_API_KEY",
-                cfg::OPENROUTER_PROVIDER => "OPENROUTER_API_KEY",
-                _ => "<PROVIDER>_API_KEY",
-            };
+            let env_var = cfg::preferred_api_key_env_var(provider).unwrap_or("<PROVIDER>_API_KEY");
             format!(
                 "API key not configured for '{}'. Run: proompt config set {}.api_key YOUR_KEY or export {}",
                 provider, provider, env_var

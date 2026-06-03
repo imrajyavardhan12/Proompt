@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 
 use super::{
-    Config, api_key_service_name, default_model_for_provider, model_matches_provider,
-    normalize_provider,
+    Config, api_key_env_vars_for_service, api_key_service_name, default_model_for_provider,
+    model_matches_provider, normalize_provider,
 };
 
 const APP_NAME: &str = "proompt";
@@ -71,22 +71,13 @@ pub fn get_api_key(service: &str) -> Result<String> {
         anyhow::bail!("Provider not configured. Run: proompt config set byok.provider openai");
     }
 
-    // 1. Check environment variable first (no keychain prompt)
-    let env_key = match service.as_str() {
-        "openai" => std::env::var("OPENAI_API_KEY").ok(),
-        "anthropic" => std::env::var("ANTHROPIC_API_KEY").ok(),
-        "google" => std::env::var("GEMINI_API_KEY")
-            .or_else(|_| std::env::var("GOOGLE_API_KEY"))
-            .ok(),
-        "openrouter" => std::env::var("OPENROUTER_API_KEY").ok(),
-        "supermemory" => std::env::var("SUPERMEMORY_API_KEY").ok(),
-        _ => None,
-    };
-
-    if let Some(key) = env_key
-        && !key.is_empty()
-    {
-        return Ok(key);
+    // 1. Check environment variables first (no keychain prompt)
+    for env_var in api_key_env_vars_for_service(&service) {
+        if let Ok(key) = std::env::var(env_var)
+            && !key.is_empty()
+        {
+            return Ok(key);
+        }
     }
 
     if keychain_disabled() {

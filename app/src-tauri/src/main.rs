@@ -13,6 +13,7 @@ fn main() {
             commands::list_templates,
             commands::apply_template,
             commands::get_config,
+            commands::get_provider_setup_status,
             commands::save_settings,
             commands::set_api_key,
             commands::test_api_connection,

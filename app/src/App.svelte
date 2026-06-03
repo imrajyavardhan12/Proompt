@@ -4,6 +4,12 @@
   import SettingsPanel from "./lib/components/SettingsPanel.svelte";
 
   let activeTab = $state<"enhance" | "templates" | "settings">("enhance");
+  let settingsProviderHint = $state<string | null>(null);
+
+  function openSettings(providerHint?: string) {
+    settingsProviderHint = providerHint ?? null;
+    activeTab = "settings";
+  }
 </script>
 
 <div class="app-shell">
@@ -48,7 +54,7 @@
         <button
           class="nav-item"
           class:active={activeTab === "settings"}
-          onclick={() => (activeTab = "settings")}
+          onclick={() => openSettings()}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
@@ -67,11 +73,11 @@
   <main class="main">
     <div class="main-inner">
       {#if activeTab === "enhance"}
-        <EnhancePanel />
+        <EnhancePanel onOpenSettings={openSettings} />
       {:else if activeTab === "templates"}
         <TemplatesPanel />
       {:else if activeTab === "settings"}
-        <SettingsPanel />
+        <SettingsPanel initialProvider={settingsProviderHint} />
       {/if}
     </div>
   </main>

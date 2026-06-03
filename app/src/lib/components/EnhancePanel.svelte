@@ -6,6 +6,18 @@
     default_image_platform?: string;
   }
 
+  interface ProviderSetupStatus {
+    mode: "byok" | "hosted";
+    provider: string;
+    model: string;
+    api_key_configured: boolean;
+    api_key_error?: string | null;
+    env_var: string;
+    cli_command: string;
+  }
+
+  let { onOpenSettings = () => {} } = $props<{ onOpenSettings?: (providerHint?: string) => void }>();
+
   let prompt = $state("");
   let enhancedPrompt = $state("");
   let platform = $state("claude");
@@ -19,6 +31,8 @@
   let resultMode = $state<"text" | "image">("text");
   let defaultTextPlatform = $state("claude");
   let defaultImagePlatform = $state("midjourney");
+  let providerSetup = $state<ProviderSetupStatus | null>(null);
+  let setupStatusLoading = $state(true);
 
   const textPlatforms = [
     { id: "claude", label: "Claude" },
@@ -41,10 +55,43 @@
 
   let platforms = $derived(mode === "text" ? textPlatforms : imagePlatforms);
   let isResultStale = $derived(!!enhancedPrompt && (platform !== resultPlatform || mode !== resultMode));
+  let providerNeedsSetup = $derived(Boolean(providerSetup && providerSetup.mode === "byok" && !providerSetup.api_key_configured));
+  let hostedModeUnavailable = $derived(Boolean(providerSetup && providerSetup.mode === "hosted"));
+  let missingKeyError = $derived(isMissingApiKeyError(error));
+  let hostedModeError = $derived(isHostedModeError(error));
+  let setupIssueVisible = $derived(!setupStatusLoading && (providerNeedsSetup || hostedModeUnavailable || missingKeyError || hostedModeError));
+  let activeProviderLabel = $derived(providerLabel(providerSetup?.provider || "openai"));
+  let recommendedProviderCopy = $derived(
+    providerSetup?.provider === "openrouter"
+      ? "You're already using OpenRouter. Paste your OpenRouter key in Settings to unlock GPT, Claude, Gemini, and OSS models."
+      : "Fastest path: switch to OpenRouter in Settings. One key unlocks GPT, Claude, Gemini, and OSS models."
+  );
 
   function getPlatformLabel(id: string, enhancementMode: "text" | "image") {
     const options = enhancementMode === "text" ? textPlatforms : imagePlatforms;
     return options.find((p) => p.id === id)?.label ?? id;
+  }
+
+  function providerLabel(providerId: string) {
+    const labels: Record<string, string> = {
+      openai: "OpenAI",
+      anthropic: "Anthropic",
+      google: "Google",
+      openrouter: "OpenRouter",
+    };
+    return labels[providerId] ?? providerId;
+  }
+
+  function isMissingApiKeyError(message: string) {
+    const normalized = message.toLowerCase();
+    return normalized.includes("api key not configured")
+      || normalized.includes("failed to get api key")
+      || normalized.includes("api key not found")
+      || normalized.includes("empty api key configured");
+  }
+
+  function isHostedModeError(message: string) {
+    return message.toLowerCase().includes("hosted mode");
   }
 
   async function loadConfigDefaults() {
@@ -60,7 +107,21 @@
     }
   }
 
-  $effect(() => { loadConfigDefaults(); });
+  async function loadProviderSetup() {
+    setupStatusLoading = true;
+    try {
+      providerSetup = await invoke<ProviderSetupStatus>("get_provider_setup_status");
+    } catch {
+      providerSetup = null;
+    } finally {
+      setupStatusLoading = false;
+    }
+  }
+
+  $effect(() => {
+    loadConfigDefaults();
+    loadProviderSetup();
+  });
 
   $effect(() => {
     const ids = platforms.map((p) => p.id);
@@ -85,7 +146,7 @@
   }
 
   async function handleEnhance() {
-    if (!prompt.trim() || isLoading) return;
+    if (!prompt.trim() || isLoading || setupStatusLoading || providerNeedsSetup || hostedModeUnavailable) return;
     isLoading = true;
     error = "";
     enhancedPrompt = "";
@@ -102,8 +163,13 @@
       enhancedPrompt = result;
       resultPlatform = requestedPlatform;
       resultMode = requestedMode;
+      loadProviderSetup();
     } catch (e: any) {
-      error = e.toString();
+      const message = e?.toString?.() ?? `${e}`;
+      error = message;
+      if (isMissingApiKeyError(message) || isHostedModeError(message)) {
+        await loadProviderSetup();
+      }
     } finally {
       isLoading = false;
     }
@@ -128,6 +194,51 @@
     <h1>Enhance</h1>
     <p class="subtitle">Transform rough prompts into optimized ones</p>
   </div>
+
+  {#if setupIssueVisible}
+    <div class="setup-card" class:warning={hostedModeUnavailable || hostedModeError}>
+      <div class="setup-icon">
+        {#if hostedModeUnavailable || hostedModeError}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        {:else}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7a2 2 0 0 1 2 2"/><path d="M15.5 3.5a6 6 0 0 1 6 6"/><path d="M5 12.5a5 5 0 0 1 7 7l-2 2-2-2-2 2-3-3 2-2a5 5 0 0 1 0-7Z"/></svg>
+        {/if}
+      </div>
+      <div class="setup-content">
+        {#if hostedModeUnavailable || hostedModeError}
+          <h2>Hosted mode is not available yet</h2>
+          <p>Switch to BYOK mode and add your own provider key to start enhancing prompts.</p>
+        {:else}
+          <h2>Add a provider key to start</h2>
+          <p>
+            Proompt is in BYOK mode. Add a {activeProviderLabel} key for
+            <strong>{providerSetup?.model || "your selected model"}</strong>, or switch providers.
+          </p>
+          <p class="setup-recommendation">{recommendedProviderCopy}</p>
+        {/if}
+
+        {#if providerSetup && !hostedModeUnavailable}
+          <div class="setup-guide-inline">
+            <span>CLI</span>
+            <code>{providerSetup.cli_command}</code>
+          </div>
+          <div class="setup-guide-inline">
+            <span>Env</span>
+            <code>export {providerSetup.env_var}=...</code>
+          </div>
+        {/if}
+
+        <div class="setup-actions">
+          <button
+            class="btn-secondary"
+            onclick={() => onOpenSettings(hostedModeUnavailable || hostedModeError ? undefined : "openrouter")}
+          >
+            {hostedModeUnavailable || hostedModeError ? "Open Settings" : "Set up OpenRouter"}
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   <div class="card">
     <div class="card-section">
@@ -216,11 +327,13 @@
       <button
         class="btn-primary"
         onclick={handleEnhance}
-        disabled={isLoading || !prompt.trim()}
+        disabled={isLoading || !prompt.trim() || setupStatusLoading || providerNeedsSetup || hostedModeUnavailable}
       >
         {#if isLoading}
           <span class="spinner"></span>
           Enhancing...
+        {:else if setupStatusLoading}
+          Checking setup...
         {:else}
           Enhance prompt
         {/if}
@@ -228,7 +341,7 @@
     </div>
   </div>
 
-  {#if error}
+  {#if error && !missingKeyError && !hostedModeError}
     <div class="alert alert-error">{error}</div>
   {/if}
 
@@ -281,6 +394,105 @@
     font-size: 13px;
     color: #52525b;
     font-weight: 450;
+  }
+
+  /* ── First-run setup ──────────────── */
+
+  .setup-card {
+    display: flex;
+    gap: 14px;
+    padding: 16px;
+    background: rgba(16, 185, 129, 0.06);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 12px;
+  }
+
+  .setup-card.warning {
+    background: rgba(251, 191, 36, 0.06);
+    border-color: rgba(251, 191, 36, 0.24);
+  }
+
+  .setup-icon {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+  }
+
+  .setup-card.warning .setup-icon {
+    background: rgba(251, 191, 36, 0.12);
+    color: #fbbf24;
+  }
+
+  .setup-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .setup-content h2 {
+    font-size: 14px;
+    font-weight: 650;
+    color: #fafafa;
+    letter-spacing: -0.2px;
+  }
+
+  .setup-content p {
+    font-size: 12.5px;
+    color: #a1a1aa;
+    line-height: 1.45;
+    margin: 0;
+  }
+
+  .setup-content strong {
+    color: #d4d4d8;
+    font-weight: 600;
+  }
+
+  .setup-recommendation {
+    color: #34d399 !important;
+  }
+
+  .setup-guide-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .setup-guide-inline span {
+    width: 28px;
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #52525b;
+  }
+
+  .setup-guide-inline code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 3px 6px;
+    background: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 5px;
+    color: #a1a1aa;
+    font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+    font-size: 10.5px;
+  }
+
+  .setup-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 2px;
   }
 
   /* ── Card ─────────────────────────── */
@@ -530,6 +742,24 @@
   .btn-primary:disabled {
     opacity: 0.35;
     cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    padding: 7px 13px;
+    background: #18181b;
+    color: #a1a1aa;
+    border: 1px solid #27272a;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 550;
+    white-space: nowrap;
+    transition: all 0.12s ease;
+  }
+
+  .btn-secondary:hover {
+    background: #27272a;
+    color: #e4e4e7;
   }
 
   .btn-ghost {

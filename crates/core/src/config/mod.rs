@@ -109,6 +109,22 @@ pub fn api_key_service_name(service: &str) -> String {
         .to_string()
 }
 
+pub fn api_key_env_vars_for_service(service: &str) -> &'static [&'static str] {
+    let service = api_key_service_name(service);
+    match service.as_str() {
+        OPENAI_PROVIDER => &["OPENAI_API_KEY"],
+        ANTHROPIC_PROVIDER => &["ANTHROPIC_API_KEY"],
+        GOOGLE_PROVIDER => &["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+        OPENROUTER_PROVIDER => &["OPENROUTER_API_KEY"],
+        "supermemory" => &["SUPERMEMORY_API_KEY"],
+        _ => &[],
+    }
+}
+
+pub fn preferred_api_key_env_var(service: &str) -> Option<&'static str> {
+    api_key_env_vars_for_service(service).first().copied()
+}
+
 pub fn default_model_for_provider(provider: &str) -> Option<&'static str> {
     let provider = normalize_provider(provider)?;
     Some(match provider {
@@ -334,5 +350,22 @@ mod tests {
         assert_eq!(api_key_service_name("gemini"), GOOGLE_PROVIDER);
         assert_eq!(api_key_service_name("open-router"), OPENROUTER_PROVIDER);
         assert_eq!(api_key_service_name("supermemory"), "supermemory");
+    }
+
+    #[test]
+    fn api_key_env_vars_include_provider_specific_fallbacks() {
+        assert_eq!(
+            api_key_env_vars_for_service("openrouter"),
+            &["OPENROUTER_API_KEY"]
+        );
+        assert_eq!(
+            api_key_env_vars_for_service("gemini"),
+            &["GEMINI_API_KEY", "GOOGLE_API_KEY"]
+        );
+        assert_eq!(
+            preferred_api_key_env_var("supermemory"),
+            Some("SUPERMEMORY_API_KEY")
+        );
+        assert!(api_key_env_vars_for_service("unknown").is_empty());
     }
 }

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
 
+  let { initialProvider = null } = $props<{ initialProvider?: string | null }>();
+
   let mode = $state("byok");
   let provider = $state("openai");
   let model = $state("gpt-4o");
@@ -68,6 +70,9 @@
       defaultPlatform = config.default_platform?.toLowerCase() || "claude";
       defaultImagePlatform = config.default_image_platform?.toLowerCase() || "midjourney";
       supermemoryEnabled = config.supermemory?.enabled || false;
+      if (initialProvider && providers.some((p) => p.id === initialProvider)) {
+        selectProvider(initialProvider);
+      }
     } catch (e: any) {
       showStatus("error", `Failed to load: ${e}`);
     }
@@ -81,16 +86,34 @@
     model = selectedProvider.models[0];
   }
 
+  function selectMode(nextMode: "byok" | "hosted") {
+    if (nextMode === "hosted") {
+      showStatus("error", "Hosted mode is coming soon. Use BYOK for now.");
+      return;
+    }
+    mode = nextMode;
+  }
+
   function showStatus(type: "success" | "error", text: string) {
     status = { type, text };
     setTimeout(() => (status = null), 3500);
   }
 
+  async function persistSettings() {
+    await invoke("save_settings", { mode, provider, model, defaultPlatform, defaultImagePlatform, supermemoryEnabled });
+  }
+
   async function saveApiKey() {
     if (!apiKey.trim()) return;
+    if (modelError) {
+      showStatus("error", modelError);
+      return;
+    }
     try {
       await invoke("set_api_key", { service: provider, key: apiKey });
-      showStatus("success", `${currentProvider.label} key saved to keychain`);
+      mode = "byok";
+      await persistSettings();
+      showStatus("success", `${currentProvider.label} key saved and selected`);
       apiKey = "";
     } catch (e: any) { showStatus("error", `${e}`); }
   }
@@ -142,13 +165,17 @@
   }
 
   async function saveConfig() {
+    if (mode === "hosted") {
+      showStatus("error", "Hosted mode is coming soon. Choose BYOK to save settings.");
+      return;
+    }
     if (modelError) {
       showStatus("error", modelError);
       return;
     }
     saving = true;
     try {
-      await invoke("save_settings", { mode, provider, model, defaultPlatform, defaultImagePlatform, supermemoryEnabled });
+      await persistSettings();
       showStatus("success", "Settings saved");
     } catch (e: any) { showStatus("error", `${e}`); }
     finally { saving = false; }
@@ -160,6 +187,29 @@
     <h1>Settings</h1>
     <p class="subtitle">Configure providers, keys, and preferences</p>
   </div>
+
+  <!-- Mode -->
+  <section class="section">
+    <div class="section-label">Mode</div>
+    <div class="mode-grid">
+      <button
+        class="mode-card"
+        class:active={mode === "byok"}
+        onclick={() => selectMode("byok")}
+      >
+        <span class="mode-name">BYOK</span>
+        <span class="mode-desc">Use your own API key. Private and free.</span>
+      </button>
+      <button
+        class="mode-card"
+        class:active={mode === "hosted"}
+        onclick={() => selectMode("hosted")}
+      >
+        <span class="mode-name">Hosted Pro</span>
+        <span class="mode-desc">Coming soon</span>
+      </button>
+    </div>
+  </section>
 
   <!-- Provider -->
   <section class="section">
@@ -209,7 +259,7 @@
         bind:value={apiKey}
         placeholder={currentProvider.keyPlaceholder}
       />
-      <button class="btn-secondary" onclick={saveApiKey} disabled={!apiKey.trim()}>Save</button>
+      <button class="btn-secondary" onclick={saveApiKey} disabled={!apiKey.trim() || !!modelError}>Save</button>
       <button class="btn-secondary" onclick={testConnection} disabled={testingConnection || !!modelError}>
         {testingConnection ? "..." : "Test"}
       </button>
@@ -336,14 +386,16 @@
     align-items: center;
   }
 
-  /* ── Provider cards ───────────────── */
+  /* ── Mode and provider cards ──────── */
 
+  .mode-grid,
   .provider-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
 
+  .mode-card,
   .provider-card {
     display: flex;
     flex-direction: column;
@@ -357,26 +409,31 @@
     transition: all 0.12s ease;
   }
 
+  .mode-card:hover,
   .provider-card:hover {
     border-color: #27272a;
     background: #18181b;
   }
 
+  .mode-card.active,
   .provider-card.active {
     border-color: rgba(16, 185, 129, 0.4);
     background: rgba(16, 185, 129, 0.05);
   }
 
+  .mode-name,
   .provider-name {
     font-size: 13px;
     font-weight: 600;
     color: #e4e4e7;
   }
 
+  .mode-card.active .mode-name,
   .provider-card.active .provider-name {
     color: #34d399;
   }
 
+  .mode-desc,
   .provider-desc {
     font-size: 11px;
     color: #52525b;

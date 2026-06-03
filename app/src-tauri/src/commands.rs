@@ -6,8 +6,20 @@ use proompt_core::{
     platform::{EnhanceType, Platform, parse_platform},
     templates::{Template, TemplateFilter, TemplateManager},
 };
+use serde::Serialize;
 use tauri::AppHandle;
 use tauri_plugin_clipboard_manager::ClipboardExt;
+
+#[derive(Debug, Serialize)]
+pub struct ProviderSetupStatus {
+    pub mode: String,
+    pub provider: String,
+    pub model: String,
+    pub api_key_configured: bool,
+    pub api_key_error: Option<String>,
+    pub env_var: String,
+    pub cli_command: String,
+}
 
 #[tauri::command]
 pub async fn enhance_prompt(
@@ -57,6 +69,53 @@ pub fn apply_template(
 #[tauri::command]
 pub fn get_config() -> Result<cfg::Config, String> {
     cfg::load_config().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_provider_setup_status() -> Result<ProviderSetupStatus, String> {
+    let config = cfg::load_config().map_err(|e| e.to_string())?;
+    let provider = cfg::normalize_provider(&config.byok.provider)
+        .unwrap_or(cfg::OPENAI_PROVIDER)
+        .to_string();
+    let model = if cfg::model_matches_provider(&config.byok.model, &provider) {
+        config.byok.model.clone()
+    } else {
+        cfg::default_model_for_provider(&provider)
+            .unwrap_or("gpt-4o")
+            .to_string()
+    };
+    let env_var = cfg::preferred_api_key_env_var(&provider)
+        .unwrap_or("<PROVIDER>_API_KEY")
+        .to_string();
+    let cli_command = format!("proompt config set {}.api_key YOUR_KEY", provider);
+
+    let (api_key_configured, api_key_error) = match config.mode {
+        Mode::Byok => match cfg::get_api_key(&provider) {
+            Ok(key) if !key.trim().is_empty() => (true, None),
+            Ok(_) => (
+                false,
+                Some(format!("Empty API key configured for '{}'", provider)),
+            ),
+            Err(e) => (false, Some(e.to_string())),
+        },
+        Mode::Hosted => (
+            false,
+            Some("Hosted mode is not implemented yet. Switch to BYOK mode.".to_string()),
+        ),
+    };
+
+    Ok(ProviderSetupStatus {
+        mode: match config.mode {
+            Mode::Byok => "byok".to_string(),
+            Mode::Hosted => "hosted".to_string(),
+        },
+        provider,
+        model,
+        api_key_configured,
+        api_key_error,
+        env_var,
+        cli_command,
+    })
 }
 
 #[tauri::command]
