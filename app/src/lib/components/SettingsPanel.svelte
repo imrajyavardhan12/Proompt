@@ -9,6 +9,7 @@
   let apiKey = $state("");
   let defaultPlatform = $state("claude");
   let defaultImagePlatform = $state("midjourney");
+  let quickEnhanceHotkey = $state("CmdOrCtrl+Shift+E");
   let supermemoryEnabled = $state(false);
   let supermemoryKey = $state("");
   let status = $state<{ type: "success" | "error"; text: string } | null>(null);
@@ -60,6 +61,7 @@
 
   let currentProvider = $derived(providers.find((p) => p.id === provider) ?? providers[0]);
   let modelError = $derived(validateModel(provider, model));
+  let quickEnhanceHotkeyDisplay = $derived(formatHotkey(quickEnhanceHotkey));
 
   async function loadConfig() {
     try {
@@ -69,6 +71,7 @@
       model = config.byok?.model || "gpt-4o";
       defaultPlatform = config.default_platform?.toLowerCase() || "claude";
       defaultImagePlatform = config.default_image_platform?.toLowerCase() || "midjourney";
+      quickEnhanceHotkey = config.hotkeys?.quick_enhance || "CmdOrCtrl+Shift+E";
       supermemoryEnabled = config.supermemory?.enabled || false;
       if (initialProvider && providers.some((p) => p.id === initialProvider)) {
         selectProvider(initialProvider);
@@ -92,6 +95,14 @@
       return;
     }
     mode = nextMode;
+  }
+
+  function formatHotkey(hotkey: string) {
+    const isMac = typeof navigator !== "undefined" && navigator.platform?.includes("Mac");
+    return hotkey
+      .replace("CmdOrCtrl", isMac ? "⌘" : "Ctrl")
+      .replace("Shift", isMac ? "⇧" : "Shift")
+      .replace(/\+/g, isMac ? "" : " + ");
   }
 
   function showStatus(type: "success" | "error", text: string) {
@@ -303,6 +314,18 @@
     </div>
   </section>
 
+  <!-- Hotkeys -->
+  <section class="section">
+    <div class="section-label">Hotkeys</div>
+    <div class="hotkey-card">
+      <div>
+        <span class="hotkey-name">Quick Enhance</span>
+        <p class="hint" style="margin: 2px 0 0">Reads clipboard, enhances it, and copies the result back.</p>
+      </div>
+      <kbd>{quickEnhanceHotkeyDisplay}</kbd>
+    </div>
+  </section>
+
   <!-- SuperMemory -->
   <section class="section">
     <div class="section-row">
@@ -437,6 +460,37 @@
   .provider-desc {
     font-size: 11px;
     color: #52525b;
+  }
+
+  /* ── Hotkeys ──────────────────────── */
+
+  .hotkey-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    background: #0f0f12;
+    border: 1px solid #1a1a1e;
+    border-radius: 10px;
+  }
+
+  .hotkey-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e4e4e7;
+  }
+
+  kbd {
+    font-family: inherit;
+    font-size: 11px;
+    padding: 4px 8px;
+    background: #18181b;
+    color: #a1a1aa;
+    border-radius: 6px;
+    border: 1px solid #27272a;
+    font-weight: 600;
+    white-space: nowrap;
   }
 
   /* ── Form elements ────────────────── */

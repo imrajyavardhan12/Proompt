@@ -4,6 +4,9 @@
   interface AppConfig {
     default_platform?: string;
     default_image_platform?: string;
+    hotkeys?: {
+      quick_enhance?: string;
+    };
   }
 
   interface ProviderSetupStatus {
@@ -31,6 +34,7 @@
   let resultMode = $state<"text" | "image">("text");
   let defaultTextPlatform = $state("claude");
   let defaultImagePlatform = $state("midjourney");
+  let quickEnhanceHotkey = $state("CmdOrCtrl+Shift+E");
   let providerSetup = $state<ProviderSetupStatus | null>(null);
   let setupStatusLoading = $state(true);
 
@@ -61,6 +65,7 @@
   let hostedModeError = $derived(isHostedModeError(error));
   let setupIssueVisible = $derived(!setupStatusLoading && (providerNeedsSetup || hostedModeUnavailable || missingKeyError || hostedModeError));
   let activeProviderLabel = $derived(providerLabel(providerSetup?.provider || "openai"));
+  let quickEnhanceHotkeyDisplay = $derived(formatHotkey(quickEnhanceHotkey));
   let recommendedProviderCopy = $derived(
     providerSetup?.provider === "openrouter"
       ? "You're already using OpenRouter. Paste your OpenRouter key in Settings to unlock GPT, Claude, Gemini, and OSS models."
@@ -82,6 +87,14 @@
     return labels[providerId] ?? providerId;
   }
 
+  function formatHotkey(hotkey: string) {
+    const isMac = typeof navigator !== "undefined" && navigator.platform?.includes("Mac");
+    return hotkey
+      .replace("CmdOrCtrl", isMac ? "⌘" : "Ctrl")
+      .replace("Shift", isMac ? "⇧" : "Shift")
+      .replace(/\+/g, isMac ? "" : " + ");
+  }
+
   function isMissingApiKeyError(message: string) {
     const normalized = message.toLowerCase();
     return normalized.includes("api key not configured")
@@ -99,10 +112,12 @@
       const config = await invoke<AppConfig>("get_config");
       defaultTextPlatform = config.default_platform?.toLowerCase() || "claude";
       defaultImagePlatform = config.default_image_platform?.toLowerCase() || "midjourney";
+      quickEnhanceHotkey = config.hotkeys?.quick_enhance || "CmdOrCtrl+Shift+E";
       platform = defaultTextPlatform;
     } catch {
       defaultTextPlatform = "claude";
       defaultImagePlatform = "midjourney";
+      quickEnhanceHotkey = "CmdOrCtrl+Shift+E";
       platform = "claude";
     }
   }
@@ -193,6 +208,16 @@
   <div class="page-header">
     <h1>Enhance</h1>
     <p class="subtitle">Transform rough prompts into optimized ones</p>
+  </div>
+
+  <div class="quick-tip">
+    <div class="quick-tip-icon">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    </div>
+    <div class="quick-tip-copy">
+      <strong>Quick enhance from anywhere</strong>
+      <span>Copy a rough prompt, press <kbd>{quickEnhanceHotkeyDisplay}</kbd>, then paste the enhanced result.</span>
+    </div>
   </div>
 
   {#if setupIssueVisible}
@@ -394,6 +419,51 @@
     font-size: 13px;
     color: #52525b;
     font-weight: 450;
+  }
+
+  /* ── Quick enhance tip ────────────── */
+
+  .quick-tip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #0f0f12;
+    border: 1px solid #1a1a1e;
+    border-radius: 10px;
+  }
+
+  .quick-tip-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(16, 185, 129, 0.08);
+    color: #34d399;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .quick-tip-copy {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12px;
+    color: #71717a;
+  }
+
+  .quick-tip-copy strong {
+    color: #d4d4d8;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .quick-tip-copy span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* ── First-run setup ──────────────── */
