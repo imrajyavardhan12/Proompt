@@ -47,6 +47,17 @@ Smoke-check:
 - Templates tab loads built-in templates
 - Enhance tab validates missing provider key with an actionable error
 
+Unsigned macOS note:
+
+- The DMG is currently unsigned because Developer ID signing/notarization is not set up yet.
+- Gatekeeper may report `Proompt.app` is "damaged" on first launch.
+- If testing an official GitHub Release artifact, remove quarantine once:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Proompt.app
+open /Applications/Proompt.app
+```
+
 ## 3. Commit and push
 
 ```bash
@@ -70,7 +81,7 @@ The release workflow will create/update the GitHub Release and upload:
 - Linux CLI archive
 - macOS CLI archive
 - Windows CLI archive
-- macOS desktop `.dmg`
+- macOS Apple Silicon desktop `.dmg`
 
 ## 5. Verify GitHub Release
 
@@ -79,6 +90,17 @@ gh release view vX.Y.Z --json url,assets --jq '{url, assets:[.assets[].name]}'
 ```
 
 Confirm the release is not a draft and contains all expected assets.
+
+Release notes should clearly say:
+
+- Desktop DMG is macOS Apple Silicon only for now.
+- Desktop app is unsigned/not notarized.
+- If macOS says the app is damaged, run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Proompt.app
+open /Applications/Proompt.app
+```
 
 ## 6. If a release workflow fix is needed after tagging
 

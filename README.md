@@ -40,6 +40,15 @@ bunx tauri build
 
 The `.dmg` lands in `app/src-tauri/target/release/bundle/dmg/`. Open it and drag to Applications.
 
+#### Unsigned macOS builds
+
+Current macOS desktop releases are unsigned while we defer Apple Developer ID signing/notarization. On first launch, Gatekeeper may report that `Proompt.app` is "damaged". If you downloaded Proompt from the official GitHub release, remove the quarantine flag once:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Proompt.app
+open /Applications/Proompt.app
+```
+
 For development with hot-reload: `bunx tauri dev`
 
 ## Usage
@@ -137,7 +146,7 @@ git tag v0.1.0
 git push origin main --tags
 ```
 
-The release workflow builds CLI archives for Linux/macOS/Windows and a macOS desktop `.dmg`.
+The release workflow builds CLI archives for Linux/macOS/Windows and a macOS Apple Silicon desktop `.dmg`. The macOS app is currently unsigned; see the install note above if Gatekeeper blocks the first launch.
 
 ## Status
 
