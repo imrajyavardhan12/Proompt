@@ -50,6 +50,31 @@ pub fn show() -> Result<()> {
     );
 
     eprintln!();
+    output::section_header("Quick Enhance");
+    eprintln!();
+
+    let auto_target_status = if config.quick_enhance.auto_detect_target {
+        Style::new().green().apply_to("enabled").to_string()
+    } else {
+        Style::new().dim().apply_to("disabled").to_string()
+    };
+    let terminal_target = config
+        .quick_enhance
+        .terminal_platform
+        .map(|platform| platform.to_string())
+        .unwrap_or_else(|| "default target".to_string());
+    eprintln!(
+        "  {} {}",
+        muted.apply_to("auto target:     "),
+        auto_target_status
+    );
+    eprintln!(
+        "  {} {}",
+        muted.apply_to("terminal target: "),
+        val.apply_to(terminal_target)
+    );
+
+    eprintln!();
     output::section_header("Preferences");
     eprintln!();
 
@@ -150,6 +175,23 @@ pub fn set(key: &str, value: &str) -> Result<()> {
             }
         }
         "byok.model" => config.byok.model = value.to_string(),
+        "quick_enhance.auto_detect" | "quick_enhance.auto_detect_target" => {
+            config.quick_enhance.auto_detect_target = value.parse().unwrap_or(true);
+        }
+        "quick_enhance.terminal_platform" | "quick_enhance.terminal_target" => {
+            config.quick_enhance.terminal_platform = match value.trim() {
+                "" | "none" | "off" | "default" => None,
+                value => {
+                    let platform = platform::parse_platform(value).ok_or_else(|| {
+                        anyhow::anyhow!("Invalid terminal platform. Use {}", TEXT_PLATFORM_HELP)
+                    })?;
+                    if !platform.is_text_platform() {
+                        anyhow::bail!("Invalid terminal platform. Use {}", TEXT_PLATFORM_HELP);
+                    }
+                    Some(platform)
+                }
+            };
+        }
         "supermemory.enabled" => {
             config.supermemory.enabled = value.parse().unwrap_or(false);
         }

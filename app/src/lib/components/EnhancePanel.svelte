@@ -7,6 +7,9 @@
     hotkeys?: {
       quick_enhance?: string;
     };
+    quick_enhance?: {
+      auto_detect_target?: boolean;
+    };
   }
 
   interface EnhanceDraft {
@@ -45,6 +48,7 @@
   let defaultTextPlatform = $state("claude");
   let defaultImagePlatform = $state("midjourney");
   let quickEnhanceHotkey = $state("CmdOrCtrl+Shift+E");
+  let autoDetectTarget = $state(true);
   let providerSetup = $state<ProviderSetupStatus | null>(null);
   let setupStatusLoading = $state(true);
   let appliedDraftId = $state<string | null>(null);
@@ -94,6 +98,11 @@
   let activeProviderLabel = $derived(providerLabel(providerSetup?.provider || "openai"));
   let quickEnhanceHotkeyDisplay = $derived(formatHotkey(quickEnhanceHotkey));
   let quickEnhanceTargetLabel = $derived(getPlatformLabel(defaultTextPlatform, "text"));
+  let quickEnhanceRoutingCopy = $derived(
+    autoDetectTarget
+      ? `Auto-detects active app, falls back to ${quickEnhanceTargetLabel}`
+      : `Uses ${quickEnhanceTargetLabel}`
+  );
   let recommendedProviderCopy = $derived(
     providerSetup?.provider === "openrouter"
       ? "You're already using OpenRouter. Paste your OpenRouter key in Settings to unlock GPT, Claude, Gemini, and OSS models."
@@ -141,11 +150,13 @@
       defaultTextPlatform = config.default_platform?.toLowerCase() || "claude";
       defaultImagePlatform = config.default_image_platform?.toLowerCase() || "midjourney";
       quickEnhanceHotkey = config.hotkeys?.quick_enhance || "CmdOrCtrl+Shift+E";
+      autoDetectTarget = config.quick_enhance?.auto_detect_target ?? true;
       if (!draft) platform = defaultTextPlatform;
     } catch {
       defaultTextPlatform = "claude";
       defaultImagePlatform = "midjourney";
       quickEnhanceHotkey = "CmdOrCtrl+Shift+E";
+      autoDetectTarget = true;
       if (!draft) platform = "claude";
     }
   }
@@ -257,7 +268,7 @@
     </div>
     <div class="quick-tip-copy">
       <strong>Quick enhance from anywhere</strong>
-      <span>Uses {quickEnhanceTargetLabel}. Copy rough text, press <kbd>{quickEnhanceHotkeyDisplay}</kbd>, then paste. Prefix with /cc, /cursor, or /codex to override.</span>
+      <span>{quickEnhanceRoutingCopy}. Copy rough text, press <kbd>{quickEnhanceHotkeyDisplay}</kbd>, then paste. Prefix with /cc, /cursor, or /codex to override.</span>
     </div>
   </div>
 

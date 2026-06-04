@@ -10,6 +10,8 @@
   let defaultPlatform = $state("claude");
   let defaultImagePlatform = $state("midjourney");
   let quickEnhanceHotkey = $state("CmdOrCtrl+Shift+E");
+  let autoDetectTarget = $state(true);
+  let terminalPlatform = $state("");
   let saveHistoryEnabled = $state(true);
   let supermemoryEnabled = $state(false);
   let supermemoryKey = $state("");
@@ -73,6 +75,8 @@
       defaultPlatform = config.default_platform?.toLowerCase() || "claude";
       defaultImagePlatform = config.default_image_platform?.toLowerCase() || "midjourney";
       quickEnhanceHotkey = config.hotkeys?.quick_enhance || "CmdOrCtrl+Shift+E";
+      autoDetectTarget = config.quick_enhance?.auto_detect_target ?? true;
+      terminalPlatform = config.quick_enhance?.terminal_platform?.toLowerCase() || "";
       saveHistoryEnabled = config.preferences?.save_history ?? true;
       supermemoryEnabled = config.supermemory?.enabled || false;
       if (initialProvider && providers.some((p) => p.id === initialProvider)) {
@@ -114,13 +118,17 @@
 
   async function persistSettings() {
     await invoke("save_settings", {
-      mode,
-      provider,
-      model,
-      defaultPlatform,
-      defaultImagePlatform,
-      supermemoryEnabled,
-      saveHistoryEnabled,
+      input: {
+        mode,
+        provider,
+        model,
+        defaultPlatform,
+        defaultImagePlatform,
+        autoDetectTarget,
+        terminalPlatform: terminalPlatform || null,
+        supermemoryEnabled,
+        saveHistoryEnabled,
+      },
     });
   }
 
@@ -300,8 +308,8 @@
 
   <!-- Quick Enhance Target -->
   <section class="section">
-    <div class="section-label">Quick Enhance target</div>
-    <p class="hint" style="margin: 0 0 8px">Used by {quickEnhanceHotkeyDisplay} for clipboard text when no /prefix override is present.</p>
+    <div class="section-label">Quick Enhance fallback target</div>
+    <p class="hint" style="margin: 0 0 8px">Used by {quickEnhanceHotkeyDisplay} when no /prefix or active-app detection matches.</p>
     <div class="select-wrap">
       <select bind:value={defaultPlatform}>
         <optgroup label="Chat assistants">
@@ -316,6 +324,35 @@
           <option value="codex">Codex</option>
           <option value="coding-agent">Coding Agent</option>
         </optgroup>
+      </select>
+    </div>
+
+    <div class="section-row" style="margin-top: 12px">
+      <div>
+        <div class="section-label" style="margin-bottom: 2px">Auto-detect active app</div>
+        <p class="hint" style="margin: 0">Route Quick Enhance to Cursor, ChatGPT, Claude, or browser context when confidently detected.</p>
+      </div>
+      <label class="toggle">
+        <div class="toggle-track" class:on={autoDetectTarget}>
+          <input type="checkbox" bind:checked={autoDetectTarget} />
+          <div class="toggle-thumb"></div>
+        </div>
+      </label>
+    </div>
+
+    <div class="section-label" style="margin-top: 14px">Terminal default target</div>
+    <p class="hint" style="margin: 0 0 8px">Used for Terminal, Ghostty, iTerm, Warp, and similar apps when no /prefix is present.</p>
+    <div class="select-wrap">
+      <select bind:value={terminalPlatform}>
+        <option value="">Use fallback target</option>
+        <option value="claude-code">Claude Code</option>
+        <option value="cursor">Cursor</option>
+        <option value="codex">Codex</option>
+        <option value="coding-agent">Coding Agent</option>
+        <option value="claude">Claude</option>
+        <option value="openai">GPT</option>
+        <option value="gemini">Gemini</option>
+        <option value="generic">Generic</option>
       </select>
     </div>
   </section>

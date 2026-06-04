@@ -165,6 +165,38 @@ fn config_save_history_preference_can_be_disabled() {
 }
 
 #[test]
+fn config_quick_enhance_auto_detection_and_terminal_target_can_be_configured() {
+    let env = TestEnv::new("quick-enhance-routing-config");
+
+    assert_success(
+        env.proompt()
+            .args(["config", "set", "quick_enhance.auto_detect", "false"])
+            .output()
+            .unwrap(),
+    );
+    assert_success(
+        env.proompt()
+            .args([
+                "config",
+                "set",
+                "quick_enhance.terminal_platform",
+                "claude-code",
+            ])
+            .output()
+            .unwrap(),
+    );
+
+    let output = env.proompt().args(["config", "show"]).output().unwrap();
+    assert_success(output.clone());
+    let stderr = stderr(&output);
+
+    assert!(stderr.contains("auto target:"), "stderr was:\n{stderr}");
+    assert!(stderr.contains("disabled"), "stderr was:\n{stderr}");
+    assert!(stderr.contains("terminal target:"), "stderr was:\n{stderr}");
+    assert!(stderr.contains("claude-code"), "stderr was:\n{stderr}");
+}
+
+#[test]
 fn config_rejects_image_platform_as_text_default() {
     let env = TestEnv::new("invalid-text-platform");
 
