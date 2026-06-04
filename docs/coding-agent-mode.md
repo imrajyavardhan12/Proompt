@@ -2,7 +2,7 @@
 
 Last updated: 2026-06-04
 Target release: v0.2.0
-Status: implemented in feature branch; pending release
+Status: released in v0.2.0
 
 ## Purpose
 
