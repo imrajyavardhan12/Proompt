@@ -256,6 +256,8 @@ pub struct PreferencesConfig {
     pub launch_at_login: bool,
     #[serde(default)]
     pub telemetry: bool,
+    #[serde(default = "default_save_history")]
+    pub save_history: bool,
 }
 
 impl Default for PreferencesConfig {
@@ -264,12 +266,16 @@ impl Default for PreferencesConfig {
             theme: "system".to_string(),
             launch_at_login: false,
             telemetry: false,
+            save_history: true,
         }
     }
 }
 
 fn default_theme() -> String {
     "system".to_string()
+}
+fn default_save_history() -> bool {
+    true
 }
 
 #[cfg(test)]
@@ -350,6 +356,13 @@ mod tests {
         assert_eq!(api_key_service_name("gemini"), GOOGLE_PROVIDER);
         assert_eq!(api_key_service_name("open-router"), OPENROUTER_PROVIDER);
         assert_eq!(api_key_service_name("supermemory"), "supermemory");
+    }
+
+    #[test]
+    fn preferences_default_to_saving_history_locally() {
+        let config = Config::default();
+
+        assert!(config.preferences.save_history);
     }
 
     #[test]

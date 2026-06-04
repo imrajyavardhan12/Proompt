@@ -10,6 +10,7 @@
   let defaultPlatform = $state("claude");
   let defaultImagePlatform = $state("midjourney");
   let quickEnhanceHotkey = $state("CmdOrCtrl+Shift+E");
+  let saveHistoryEnabled = $state(true);
   let supermemoryEnabled = $state(false);
   let supermemoryKey = $state("");
   let status = $state<{ type: "success" | "error"; text: string } | null>(null);
@@ -72,6 +73,7 @@
       defaultPlatform = config.default_platform?.toLowerCase() || "claude";
       defaultImagePlatform = config.default_image_platform?.toLowerCase() || "midjourney";
       quickEnhanceHotkey = config.hotkeys?.quick_enhance || "CmdOrCtrl+Shift+E";
+      saveHistoryEnabled = config.preferences?.save_history ?? true;
       supermemoryEnabled = config.supermemory?.enabled || false;
       if (initialProvider && providers.some((p) => p.id === initialProvider)) {
         selectProvider(initialProvider);
@@ -111,7 +113,15 @@
   }
 
   async function persistSettings() {
-    await invoke("save_settings", { mode, provider, model, defaultPlatform, defaultImagePlatform, supermemoryEnabled });
+    await invoke("save_settings", {
+      mode,
+      provider,
+      model,
+      defaultPlatform,
+      defaultImagePlatform,
+      supermemoryEnabled,
+      saveHistoryEnabled,
+    });
   }
 
   async function saveApiKey() {
@@ -323,6 +333,22 @@
         <p class="hint" style="margin: 2px 0 0">Reads clipboard, enhances it, and copies the result back.</p>
       </div>
       <kbd>{quickEnhanceHotkeyDisplay}</kbd>
+    </div>
+  </section>
+
+  <!-- Privacy -->
+  <section class="section">
+    <div class="section-row">
+      <div>
+        <div class="section-label" style="margin-bottom: 2px">Local history</div>
+        <p class="hint" style="margin: 0">Save successful prompt enhancements locally on this device.</p>
+      </div>
+      <label class="toggle">
+        <div class="toggle-track" class:on={saveHistoryEnabled}>
+          <input type="checkbox" bind:checked={saveHistoryEnabled} />
+          <div class="toggle-thumb"></div>
+        </div>
+      </label>
     </div>
   </section>
 

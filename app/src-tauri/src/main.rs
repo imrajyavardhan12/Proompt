@@ -15,6 +15,10 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::enhance_prompt,
             commands::quick_enhance_clipboard,
+            commands::list_history,
+            commands::set_history_favorite,
+            commands::delete_history_record,
+            commands::clear_prompt_history,
             commands::list_templates,
             commands::apply_template,
             commands::get_config,

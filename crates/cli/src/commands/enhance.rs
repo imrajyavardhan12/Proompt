@@ -4,9 +4,11 @@ use anyhow::{Context, Result};
 use proompt_core::{
     config as cfg,
     enhance::{
-        ConfiguredEnhanceRequest, SuperMemoryStatus, enhance_with_loaded_config,
-        enhance_with_loaded_config_stream, prepare_enhancement, provider_supports_streaming,
+        ConfiguredEnhanceRequest, ConfiguredEnhanceResponse, SuperMemoryStatus,
+        enhance_with_loaded_config, enhance_with_loaded_config_stream, prepare_enhancement,
+        provider_supports_streaming,
     },
+    history::{NewPromptHistoryRecord, append_history_record},
     platform::EnhanceType,
 };
 
@@ -51,6 +53,7 @@ pub async fn run(
         max_tokens: None,
     };
     let prepared = prepare_enhancement(&config, &input)?;
+    let save_history = config.preferences.save_history;
 
     let type_label = match prepared.request.enhancement_type {
         EnhanceType::Text => "text",
@@ -105,6 +108,7 @@ pub async fn run(
             &result.response.changes_summary,
             &result.memory_status,
         );
+        record_history(prompt, &result, save_history);
         eprintln!();
     } else {
         let spinner = output::spinner(&format!(
@@ -124,9 +128,27 @@ pub async fn run(
             &result.response.platform.to_string(),
         );
         print_memory_note(&result.memory_status);
+        record_history(prompt, &result, save_history);
     }
 
     Ok(())
+}
+
+fn record_history(prompt: &str, result: &ConfiguredEnhanceResponse, save_history: bool) {
+    if !save_history {
+        return;
+    }
+
+    if let Err(e) = append_history_record(NewPromptHistoryRecord {
+        original_prompt: prompt.to_string(),
+        enhanced_prompt: result.response.enhanced_prompt.clone(),
+        enhancement_type: result.enhancement_type,
+        platform: result.response.platform,
+        provider: result.provider.clone(),
+        model: result.model.clone(),
+    }) {
+        output::warn(&format!("Could not save prompt history: {}", e));
+    }
 }
 
 fn parse_style_hints(style: &str) -> Vec<String> {

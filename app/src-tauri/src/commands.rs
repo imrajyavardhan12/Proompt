@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use proompt_core::{
     config::{self as cfg, Mode},
     enhance::{ConfiguredEnhanceRequest, enhance_with_config},
+    history::{self, NewPromptHistoryRecord, PromptHistoryRecord},
     platform::{EnhanceType, Platform, parse_platform},
     templates::{Template, TemplateFilter, TemplateManager},
 };
@@ -76,6 +77,7 @@ pub async fn enhance_prompt(
         _ => EnhanceType::Text,
     };
 
+    let original_prompt = prompt.clone();
     let result = enhance_with_config(ConfiguredEnhanceRequest {
         prompt,
         platform: Some(platform),
@@ -87,7 +89,17 @@ pub async fn enhance_prompt(
     .await
     .map_err(|e| e.to_string())?;
 
-    Ok(result.response.enhanced_prompt)
+    let enhanced_prompt = result.response.enhanced_prompt.clone();
+    record_prompt_history_if_enabled(NewPromptHistoryRecord {
+        original_prompt,
+        enhanced_prompt: enhanced_prompt.clone(),
+        enhancement_type: result.enhancement_type,
+        platform: result.response.platform,
+        provider: result.provider,
+        model: result.model,
+    });
+
+    Ok(enhanced_prompt)
 }
 
 #[tauri::command]
@@ -110,6 +122,7 @@ async fn quick_enhance_clipboard_inner(app: AppHandle) -> anyhow::Result<String>
         anyhow::bail!("Clipboard is empty. Copy a rough prompt first.");
     }
 
+    let original_prompt = prompt.clone();
     let result = enhance_with_config(ConfiguredEnhanceRequest {
         prompt,
         platform: None,
@@ -120,9 +133,26 @@ async fn quick_enhance_clipboard_inner(app: AppHandle) -> anyhow::Result<String>
     })
     .await?;
 
-    let enhanced_prompt = result.response.enhanced_prompt;
+    let enhanced_prompt = result.response.enhanced_prompt.clone();
     app.clipboard().write_text(&enhanced_prompt)?;
+    record_prompt_history_if_enabled(NewPromptHistoryRecord {
+        original_prompt,
+        enhanced_prompt: enhanced_prompt.clone(),
+        enhancement_type: result.enhancement_type,
+        platform: result.response.platform,
+        provider: result.provider,
+        model: result.model,
+    });
     Ok(enhanced_prompt)
+}
+
+fn record_prompt_history_if_enabled(record: NewPromptHistoryRecord) {
+    let save_history = cfg::load_config()
+        .map(|config| config.preferences.save_history)
+        .unwrap_or(true);
+    if save_history {
+        let _ = history::append_history_record(record);
+    }
 }
 
 fn notify(app: &AppHandle, title: &str, body: &str) {
@@ -141,6 +171,36 @@ fn friendly_quick_enhance_error(message: &str) -> String {
     } else {
         message.to_string()
     }
+}
+
+#[tauri::command]
+pub fn list_history(
+    limit: Option<usize>,
+    favorites_only: Option<bool>,
+) -> Result<Vec<PromptHistoryRecord>, String> {
+    let mut records = history::load_history().map_err(|e| e.to_string())?;
+    if favorites_only.unwrap_or(false) {
+        records.retain(|record| record.favorite);
+    }
+    if let Some(limit) = limit {
+        records.truncate(limit);
+    }
+    Ok(records)
+}
+
+#[tauri::command]
+pub fn set_history_favorite(id: String, favorite: bool) -> Result<PromptHistoryRecord, String> {
+    history::set_history_favorite(&id, favorite).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_history_record(id: String) -> Result<bool, String> {
+    history::delete_history_record(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn clear_prompt_history() -> Result<usize, String> {
+    history::clear_history().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -221,6 +281,7 @@ pub fn save_settings(
     default_platform: String,
     default_image_platform: Option<String>,
     supermemory_enabled: bool,
+    save_history_enabled: bool,
 ) -> Result<(), String> {
     let mut config = cfg::load_config().map_err(|e| e.to_string())?;
     config.mode = match mode.as_str() {
@@ -260,6 +321,7 @@ pub fn save_settings(
     }
 
     config.supermemory.enabled = supermemory_enabled;
+    config.preferences.save_history = save_history_enabled;
     cfg::save_config(&config).map_err(|e| e.to_string())
 }
 
