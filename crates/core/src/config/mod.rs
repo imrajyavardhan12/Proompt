@@ -23,6 +23,8 @@ pub struct Config {
     #[serde(default)]
     pub hotkeys: HotkeyConfig,
     #[serde(default)]
+    pub quick_enhance: QuickEnhanceConfig,
+    #[serde(default)]
     pub preferences: PreferencesConfig,
 }
 
@@ -36,6 +38,7 @@ impl Default for Config {
             hosted: HostedConfig::default(),
             supermemory: SuperMemoryConfig::default(),
             hotkeys: HotkeyConfig::default(),
+            quick_enhance: QuickEnhanceConfig::default(),
             preferences: PreferencesConfig::default(),
         }
     }
@@ -246,6 +249,27 @@ fn default_open_window() -> String {
 }
 fn default_open_templates() -> String {
     "CmdOrCtrl+Shift+T".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuickEnhanceConfig {
+    #[serde(default = "default_auto_detect_target")]
+    pub auto_detect_target: bool,
+    #[serde(default)]
+    pub terminal_platform: Option<Platform>,
+}
+
+impl Default for QuickEnhanceConfig {
+    fn default() -> Self {
+        Self {
+            auto_detect_target: true,
+            terminal_platform: None,
+        }
+    }
+}
+
+fn default_auto_detect_target() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

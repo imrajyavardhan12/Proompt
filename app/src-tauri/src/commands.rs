@@ -1,14 +1,20 @@
 use std::collections::HashMap;
 
+#[cfg(target_os = "macos")]
+use std::process::Command;
+
 use proompt_core::{
     config::{self as cfg, Mode},
     enhance::{ConfiguredEnhanceRequest, enhance_with_config, enhance_with_loaded_config},
     history::{self, NewPromptHistoryRecord, PromptHistoryRecord},
     platform::{EnhanceType, Platform, parse_platform},
-    routing::{ResolutionSource, TargetResolution, resolve_quick_enhance_input},
+    routing::{
+        ActiveApp, BrowserContext, EnvironmentSnapshot, ResolutionSource, TargetResolution,
+        resolve_quick_enhance_input_with_environment,
+    },
     templates::{Template, TemplateFilter, TemplateManager},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -23,6 +29,20 @@ const IMAGE_PLATFORM_HELP: &str = "midjourney, dalle, sd, or generic";
 struct QuickEnhanceOutcome {
     enhanced_prompt: String,
     resolution: TargetResolution,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveSettingsInput {
+    mode: String,
+    provider: String,
+    model: Option<String>,
+    default_platform: String,
+    default_image_platform: Option<String>,
+    auto_detect_target: bool,
+    terminal_platform: Option<String>,
+    supermemory_enabled: bool,
+    save_history_enabled: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -138,7 +158,9 @@ async fn quick_enhance_clipboard_inner(app: AppHandle) -> anyhow::Result<QuickEn
     }
 
     let config = cfg::load_config()?;
-    let resolved = resolve_quick_enhance_input(&config, &prompt)?;
+    let environment = collect_environment_snapshot();
+    let resolved =
+        resolve_quick_enhance_input_with_environment(&config, &prompt, environment.as_ref())?;
     let result = enhance_with_loaded_config(
         ConfiguredEnhanceRequest {
             prompt: resolved.prompt.clone(),
@@ -170,17 +192,173 @@ async fn quick_enhance_clipboard_inner(app: AppHandle) -> anyhow::Result<QuickEn
 
 fn quick_enhance_success_message(resolution: &TargetResolution) -> String {
     match resolution.source {
-        ResolutionSource::ExplicitPrefix => {
-            format!(
-                "Enhanced for {} ({}).",
-                resolution.platform.label(),
-                resolution.reason
-            )
-        }
-        ResolutionSource::ConfigDefault => {
-            format!("Enhanced for {}.", resolution.platform.label())
-        }
+        ResolutionSource::ConfigDefault => format!("Enhanced for {}.", resolution.platform.label()),
+        _ => format!(
+            "Enhanced for {} ({}).",
+            resolution.platform.label(),
+            resolution.reason
+        ),
     }
+}
+
+fn collect_environment_snapshot() -> Option<EnvironmentSnapshot> {
+    collect_active_app().map(|(active_app, window_title)| {
+        let browser_context = collect_browser_context(&active_app);
+        EnvironmentSnapshot {
+            active_app: Some(active_app),
+            window_title,
+            browser_context,
+            terminal_context: None,
+        }
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn collect_active_app() -> Option<(ActiveApp, Option<String>)> {
+    let script = r#"
+        tell application "System Events"
+            set frontApp to first application process whose frontmost is true
+            set appName to name of frontApp
+            set bundleId to bundle identifier of frontApp
+            set windowTitle to ""
+            try
+                set windowTitle to name of front window of frontApp
+            end try
+            return appName & linefeed & bundleId & linefeed & windowTitle
+        end tell
+    "#;
+
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut lines = stdout.lines();
+    let app_name = lines.next()?.trim();
+    if app_name.is_empty() {
+        return None;
+    }
+    let bundle_id = lines
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let window_title = lines
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let mut app = ActiveApp::new(app_name);
+    if let Some(bundle_id) = bundle_id {
+        app = app.with_bundle_id(bundle_id);
+    }
+
+    Some((app, window_title.map(str::to_string)))
+}
+
+#[cfg(target_os = "macos")]
+fn collect_browser_context(active_app: &ActiveApp) -> Option<BrowserContext> {
+    let app_name = active_app.name.to_ascii_lowercase();
+    let script = if app_name.contains("safari") {
+        r#"
+            tell application "Safari"
+                set activeTab to current tab of front window
+                return URL of activeTab & linefeed & name of activeTab
+            end tell
+        "#
+    } else if app_name.contains("chrome") {
+        chromium_browser_script("Google Chrome")
+    } else if app_name.contains("brave") {
+        chromium_browser_script("Brave Browser")
+    } else if app_name.contains("edge") {
+        chromium_browser_script("Microsoft Edge")
+    } else if app_name.contains("arc") {
+        chromium_browser_script("Arc")
+    } else {
+        return None;
+    };
+
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut lines = stdout.lines();
+    let url = lines
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let title = lines
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    if url.is_none() && title.is_none() {
+        return None;
+    }
+
+    Some(BrowserContext {
+        url: url.map(str::to_string),
+        title: title.map(str::to_string),
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn chromium_browser_script(app_name: &str) -> &'static str {
+    match app_name {
+        "Google Chrome" => {
+            r#"
+                tell application "Google Chrome"
+                    set activeTab to active tab of front window
+                    return URL of activeTab & linefeed & title of activeTab
+                end tell
+            "#
+        }
+        "Brave Browser" => {
+            r#"
+                tell application "Brave Browser"
+                    set activeTab to active tab of front window
+                    return URL of activeTab & linefeed & title of activeTab
+                end tell
+            "#
+        }
+        "Microsoft Edge" => {
+            r#"
+                tell application "Microsoft Edge"
+                    set activeTab to active tab of front window
+                    return URL of activeTab & linefeed & title of activeTab
+                end tell
+            "#
+        }
+        "Arc" => {
+            r#"
+                tell application "Arc"
+                    set activeTab to active tab of front window
+                    return URL of activeTab & linefeed & title of activeTab
+                end tell
+            "#
+        }
+        _ => unreachable!("only known Chromium browser names are used"),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn collect_active_app() -> Option<(ActiveApp, Option<String>)> {
+    None
+}
+
+#[cfg(not(target_os = "macos"))]
+fn collect_browser_context(_active_app: &ActiveApp) -> Option<BrowserContext> {
+    None
 }
 
 fn record_prompt_history_if_enabled(record: NewPromptHistoryRecord) {
@@ -311,22 +489,14 @@ pub fn get_provider_setup_status() -> Result<ProviderSetupStatus, String> {
 }
 
 #[tauri::command]
-pub fn save_settings(
-    mode: String,
-    provider: String,
-    model: Option<String>,
-    default_platform: String,
-    default_image_platform: Option<String>,
-    supermemory_enabled: bool,
-    save_history_enabled: bool,
-) -> Result<(), String> {
+pub fn save_settings(input: SaveSettingsInput) -> Result<(), String> {
     let mut config = cfg::load_config().map_err(|e| e.to_string())?;
-    config.mode = match mode.as_str() {
+    config.mode = match input.mode.as_str() {
         "hosted" => Mode::Hosted,
         _ => Mode::Byok,
     };
-    cfg::set_byok_provider(&mut config, &provider).map_err(|e| e.to_string())?;
-    let model = model.unwrap_or_else(|| config.byok.model.clone());
+    cfg::set_byok_provider(&mut config, &input.provider).map_err(|e| e.to_string())?;
+    let model = input.model.unwrap_or_else(|| config.byok.model.clone());
     let model = model.trim().to_string();
     if model.is_empty() {
         return Err("Model is required".to_string());
@@ -336,14 +506,14 @@ pub fn save_settings(
     }
     config.byok.model = model;
 
-    let default_platform = parse_platform(&default_platform)
+    let default_platform = parse_platform(&input.default_platform)
         .ok_or_else(|| format!("Default platform must be {}", TEXT_PLATFORM_HELP))?;
     if !default_platform.is_text_platform() {
         return Err(format!("Default platform must be {}", TEXT_PLATFORM_HELP));
     }
     config.default_platform = default_platform;
 
-    if let Some(default_image_platform) = default_image_platform {
+    if let Some(default_image_platform) = input.default_image_platform {
         let default_image_platform = parse_platform(&default_image_platform)
             .ok_or_else(|| format!("Default image platform must be {}", IMAGE_PLATFORM_HELP))?;
         if !default_image_platform.is_image_platform()
@@ -357,8 +527,23 @@ pub fn save_settings(
         config.default_image_platform = default_image_platform;
     }
 
-    config.supermemory.enabled = supermemory_enabled;
-    config.preferences.save_history = save_history_enabled;
+    config.quick_enhance.auto_detect_target = input.auto_detect_target;
+    config.quick_enhance.terminal_platform = match input.terminal_platform.as_deref().map(str::trim)
+    {
+        Some("") | None => None,
+        Some("none" | "off" | "default") => None,
+        Some(platform) => {
+            let platform = parse_platform(platform)
+                .ok_or_else(|| format!("Terminal platform must be {}", TEXT_PLATFORM_HELP))?;
+            if !platform.is_text_platform() {
+                return Err(format!("Terminal platform must be {}", TEXT_PLATFORM_HELP));
+            }
+            Some(platform)
+        }
+    };
+
+    config.supermemory.enabled = input.supermemory_enabled;
+    config.preferences.save_history = input.save_history_enabled;
     cfg::save_config(&config).map_err(|e| e.to_string())
 }
 

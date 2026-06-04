@@ -55,7 +55,7 @@ For development with hot-reload: `bunx tauri dev`
 
 ### Quick Enhance from anywhere
 
-The fastest workflow is the global hotkey. Use the app once to set your **Quick Enhance target** (for example Claude Code), then stay in your current tool:
+The fastest workflow is the global hotkey. Use the app once to set your **Quick Enhance fallback target** and optional active-app/terminal routing, then stay in your current tool:
 
 ```text
 copy rough task -> press Cmd/Ctrl+Shift+E -> paste enhanced prompt
@@ -72,7 +72,7 @@ For coding agents, prefix clipboard text to override the target without opening 
 /claude explain this tradeoff      -> Claude
 ```
 
-Proompt strips the prefix, enhances for that target, copies the result, and notifies which target was used.
+Proompt strips the prefix, enhances for that target, copies the result, and notifies which target was used. When auto-detect is enabled, Quick Enhance can route from active apps such as Cursor, ChatGPT, Claude, supported browser window titles, or a configured terminal default.
 
 ### CLI
 

@@ -42,6 +42,14 @@ pub fn load_config() -> Result<Config> {
             .to_string();
     }
 
+    if config
+        .quick_enhance
+        .terminal_platform
+        .is_some_and(|platform| !platform.is_text_platform())
+    {
+        config.quick_enhance.terminal_platform = None;
+    }
+
     Ok(config)
 }
 
@@ -154,6 +162,8 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.mode, super::super::Mode::Byok);
         assert_eq!(config.default_platform, crate::platform::Platform::Claude);
+        assert!(config.quick_enhance.auto_detect_target);
+        assert_eq!(config.quick_enhance.terminal_platform, None);
         assert!(!config.supermemory.enabled);
     }
 
@@ -164,5 +174,9 @@ mod tests {
         let deserialized: Config = toml::from_str(&serialized).unwrap();
         assert_eq!(deserialized.mode, config.mode);
         assert_eq!(deserialized.default_platform, config.default_platform);
+        assert_eq!(
+            deserialized.quick_enhance.auto_detect_target,
+            config.quick_enhance.auto_detect_target
+        );
     }
 }
