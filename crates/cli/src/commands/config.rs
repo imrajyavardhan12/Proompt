@@ -7,6 +7,10 @@ use proompt_core::{
 
 use crate::output;
 
+const TEXT_PLATFORM_HELP: &str =
+    "claude, claude-code, openai, gemini, cursor, codex, coding-agent, or generic";
+const IMAGE_PLATFORM_HELP: &str = "midjourney, dalle, sd, or generic";
+
 pub fn show() -> Result<()> {
     let config = cfg::load_config()?;
 
@@ -36,7 +40,7 @@ pub fn show() -> Result<()> {
     );
     eprintln!(
         "  {} {}",
-        muted.apply_to("default platform:"),
+        muted.apply_to("quick target:    "),
         val.apply_to(config.default_platform.to_string())
     );
     eprintln!(
@@ -116,22 +120,24 @@ pub fn set(key: &str, value: &str) -> Result<()> {
         }
         "default_platform" => {
             let platform = platform::parse_platform(value).ok_or_else(|| {
-                anyhow::anyhow!("Invalid default platform. Use claude, openai, gemini, or generic")
+                anyhow::anyhow!("Invalid default platform. Use {}", TEXT_PLATFORM_HELP)
             })?;
             if !platform.is_text_platform() {
-                anyhow::bail!("Invalid default platform. Use claude, openai, gemini, or generic");
+                anyhow::bail!("Invalid default platform. Use {}", TEXT_PLATFORM_HELP);
             }
             config.default_platform = platform;
         }
         "default_image_platform" => {
             let platform = platform::parse_platform(value).ok_or_else(|| {
                 anyhow::anyhow!(
-                    "Invalid default image platform. Use midjourney, dalle, sd, or generic"
+                    "Invalid default image platform. Use {}",
+                    IMAGE_PLATFORM_HELP
                 )
             })?;
             if !platform.is_image_platform() && platform != Platform::Generic {
                 anyhow::bail!(
-                    "Invalid default image platform. Use midjourney, dalle, sd, or generic"
+                    "Invalid default image platform. Use {}",
+                    IMAGE_PLATFORM_HELP
                 );
             }
             config.default_image_platform = platform;

@@ -28,8 +28,12 @@ fn build_changes_summary(
 
     changes.push(match platform {
         Platform::Claude => "Optimized for Claude (XML tags, thinking prompts)",
+        Platform::ClaudeCode => "Composed for Claude Code (repo workflow, root-cause-first)",
         Platform::OpenAI => "Optimized for GPT (role framing, markdown structure)",
         Platform::Gemini => "Optimized for Gemini (explicit formatting, grounding)",
+        Platform::Cursor => "Composed for Cursor (minimal diffs, IDE workflow)",
+        Platform::Codex => "Composed for Codex (deterministic acceptance criteria)",
+        Platform::CodingAgent => "Composed for coding agents (task, constraints, test plan)",
         Platform::Midjourney => "Formatted for Midjourney (parameters, style keywords)",
         Platform::DallE => "Formatted for DALL-E (natural language, safety-aware)",
         Platform::StableDiffusion => "Formatted for SD (weighted tokens, negative prompt)",

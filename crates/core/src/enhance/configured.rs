@@ -48,6 +48,11 @@ pub struct ConfiguredEnhanceResponse {
     pub memory_status: SuperMemoryStatus,
 }
 
+const TEXT_PLATFORM_HELP: &str =
+    "claude, claude-code, openai, gemini, cursor, codex, coding-agent, or generic";
+const IMAGE_PLATFORM_HELP: &str = "midjourney, dalle, sd, or generic";
+const ALL_PLATFORM_HELP: &str = "claude, claude-code, openai, gemini, cursor, codex, coding-agent, generic, midjourney, dalle, or sd";
+
 pub fn provider_supports_streaming(provider: &str) -> bool {
     matches!(
         cfg::normalize_provider(provider),
@@ -81,8 +86,9 @@ pub fn prepare_enhancement(
     let platform = match input.platform.as_deref() {
         Some(platform) => parse_platform(platform).ok_or_else(|| {
             anyhow::anyhow!(
-                "Invalid platform '{}'. Use claude, openai, gemini, generic, midjourney, dalle, or sd.",
-                platform
+                "Invalid platform '{}'. Use {}.",
+                platform,
+                ALL_PLATFORM_HELP
             )
         })?,
         None => match input.enhancement_type {
@@ -185,10 +191,10 @@ pub async fn enhance_with_loaded_config_stream(
 fn validate_platform_for_type(platform: Platform, enhancement_type: EnhanceType) -> Result<()> {
     match enhancement_type {
         EnhanceType::Text if !platform.is_text_platform() => {
-            anyhow::bail!("Text enhancement requires claude, openai, gemini, or generic platform")
+            anyhow::bail!("Text enhancement requires one of: {}", TEXT_PLATFORM_HELP)
         }
         EnhanceType::Image if !platform.is_image_platform() && platform != Platform::Generic => {
-            anyhow::bail!("Image enhancement requires midjourney, dalle, sd, or generic platform")
+            anyhow::bail!("Image enhancement requires one of: {}", IMAGE_PLATFORM_HELP)
         }
         _ => Ok(()),
     }
@@ -363,6 +369,30 @@ mod tests {
         let result = prepare_enhancement(&config, &input);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn prepare_accepts_coding_agent_platforms_as_text() {
+        let config = Config::default();
+        let cases = [
+            ("claude-code", Platform::ClaudeCode),
+            ("cursor", Platform::Cursor),
+            ("codex", Platform::Codex),
+            ("coding-agent", Platform::CodingAgent),
+        ];
+
+        for (platform, expected) in cases {
+            let input = ConfiguredEnhanceRequest {
+                prompt: "fix upload bug".to_string(),
+                platform: Some(platform.to_string()),
+                ..Default::default()
+            };
+
+            let prepared = prepare_enhancement(&config, &input).unwrap();
+
+            assert_eq!(prepared.request.platform, expected);
+            assert_eq!(prepared.request.enhancement_type, EnhanceType::Text);
+        }
     }
 
     #[test]

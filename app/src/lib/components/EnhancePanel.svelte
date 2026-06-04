@@ -49,12 +49,28 @@
   let setupStatusLoading = $state(true);
   let appliedDraftId = $state<string | null>(null);
 
-  const textPlatforms = [
-    { id: "claude", label: "Claude" },
-    { id: "openai", label: "GPT" },
-    { id: "gemini", label: "Gemini" },
-    { id: "generic", label: "Generic" },
+  const textPlatformGroups = [
+    {
+      label: "Chat assistants",
+      platforms: [
+        { id: "claude", label: "Claude" },
+        { id: "openai", label: "GPT" },
+        { id: "gemini", label: "Gemini" },
+        { id: "generic", label: "Generic" },
+      ],
+    },
+    {
+      label: "Coding agents",
+      platforms: [
+        { id: "claude-code", label: "Claude Code" },
+        { id: "cursor", label: "Cursor" },
+        { id: "codex", label: "Codex" },
+        { id: "coding-agent", label: "Coding Agent" },
+      ],
+    },
   ];
+
+  const textPlatforms = textPlatformGroups.flatMap((group) => group.platforms);
 
   const imagePlatforms = [
     { id: "midjourney", label: "Midjourney" },
@@ -77,6 +93,7 @@
   let setupIssueVisible = $derived(!setupStatusLoading && (providerNeedsSetup || hostedModeUnavailable || missingKeyError || hostedModeError));
   let activeProviderLabel = $derived(providerLabel(providerSetup?.provider || "openai"));
   let quickEnhanceHotkeyDisplay = $derived(formatHotkey(quickEnhanceHotkey));
+  let quickEnhanceTargetLabel = $derived(getPlatformLabel(defaultTextPlatform, "text"));
   let recommendedProviderCopy = $derived(
     providerSetup?.provider === "openrouter"
       ? "You're already using OpenRouter. Paste your OpenRouter key in Settings to unlock GPT, Claude, Gemini, and OSS models."
@@ -240,7 +257,7 @@
     </div>
     <div class="quick-tip-copy">
       <strong>Quick enhance from anywhere</strong>
-      <span>Copy a rough prompt, press <kbd>{quickEnhanceHotkeyDisplay}</kbd>, then paste the enhanced result.</span>
+      <span>Uses {quickEnhanceTargetLabel}. Copy rough text, press <kbd>{quickEnhanceHotkeyDisplay}</kbd>, then paste. Prefix with /cc, /cursor, or /codex to override.</span>
     </div>
   </div>
 
@@ -309,17 +326,38 @@
       <div class="label-row">
         <span class="label">Target platform</span>
       </div>
-      <div class="chips">
-        {#each platforms as p}
-          <button
-            class="chip"
-            class:active={platform === p.id}
-            onclick={() => (platform = p.id)}
-          >
-            {p.label}
-          </button>
-        {/each}
-      </div>
+      {#if mode === "text"}
+        <div class="chip-groups">
+          {#each textPlatformGroups as group}
+            <div class="chip-group">
+              <span class="chip-group-label">{group.label}</span>
+              <div class="chips">
+                {#each group.platforms as p}
+                  <button
+                    class="chip"
+                    class:active={platform === p.id}
+                    onclick={() => (platform = p.id)}
+                  >
+                    {p.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div class="chips">
+          {#each platforms as p}
+            <button
+              class="chip"
+              class:active={platform === p.id}
+              onclick={() => (platform = p.id)}
+            >
+              {p.label}
+            </button>
+          {/each}
+        </div>
+      {/if}
     </div>
 
     <div class="divider"></div>
@@ -660,6 +698,26 @@
     color: #52525b;
     text-transform: uppercase;
     letter-spacing: 0.6px;
+  }
+
+  .chip-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .chip-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .chip-group-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: #3f3f46;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
   .chips {

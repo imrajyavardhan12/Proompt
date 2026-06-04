@@ -129,8 +129,12 @@
   function platformLabel(platform: string) {
     const labels: Record<string, string> = {
       claude: "Claude",
+      "claude-code": "Claude Code",
       openai: "GPT",
       gemini: "Gemini",
+      cursor: "Cursor",
+      codex: "Codex",
+      "coding-agent": "Coding Agent",
       generic: "Generic",
       midjourney: "Midjourney",
       dalle: "DALL-E",

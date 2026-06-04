@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use proompt_core::{
     config::{self as cfg, Mode},
-    enhance::{ConfiguredEnhanceRequest, enhance_with_config},
+    enhance::{ConfiguredEnhanceRequest, enhance_with_config, enhance_with_loaded_config},
     history::{self, NewPromptHistoryRecord, PromptHistoryRecord},
     platform::{EnhanceType, Platform, parse_platform},
+    routing::{ResolutionSource, TargetResolution, resolve_quick_enhance_input},
     templates::{Template, TemplateFilter, TemplateManager},
 };
 use serde::Serialize;
@@ -14,6 +15,15 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 
 const DEFAULT_QUICK_ENHANCE_HOTKEY: &str = "CmdOrCtrl+Shift+E";
+const TEXT_PLATFORM_HELP: &str =
+    "claude, claude-code, openai, gemini, cursor, codex, coding-agent, or generic";
+const IMAGE_PLATFORM_HELP: &str = "midjourney, dalle, sd, or generic";
+
+#[derive(Debug)]
+struct QuickEnhanceOutcome {
+    enhanced_prompt: String,
+    resolution: TargetResolution,
+}
 
 #[derive(Debug, Serialize)]
 pub struct ProviderSetupStatus {
@@ -106,44 +116,71 @@ pub async fn enhance_prompt(
 pub async fn quick_enhance_clipboard(app: AppHandle) -> Result<String, String> {
     quick_enhance_clipboard_inner(app)
         .await
+        .map(|outcome| outcome.enhanced_prompt)
         .map_err(|e| friendly_quick_enhance_error(&e.to_string()))
 }
 
 async fn quick_enhance_clipboard_with_notifications(app: AppHandle) -> anyhow::Result<String> {
     notify(&app, "Proompt", "Enhancing clipboard prompt...");
-    let enhanced_prompt = quick_enhance_clipboard_inner(app.clone()).await?;
-    notify(&app, "Proompt", "Enhanced prompt copied to clipboard.");
-    Ok(enhanced_prompt)
+    let outcome = quick_enhance_clipboard_inner(app.clone()).await?;
+    notify(
+        &app,
+        "Proompt",
+        &quick_enhance_success_message(&outcome.resolution),
+    );
+    Ok(outcome.enhanced_prompt)
 }
 
-async fn quick_enhance_clipboard_inner(app: AppHandle) -> anyhow::Result<String> {
+async fn quick_enhance_clipboard_inner(app: AppHandle) -> anyhow::Result<QuickEnhanceOutcome> {
     let prompt = app.clipboard().read_text()?;
     if prompt.trim().is_empty() {
         anyhow::bail!("Clipboard is empty. Copy a rough prompt first.");
     }
 
-    let original_prompt = prompt.clone();
-    let result = enhance_with_config(ConfiguredEnhanceRequest {
-        prompt,
-        platform: None,
-        enhancement_type: Some(EnhanceType::Text),
-        include_memory: false,
-        style_hints: None,
-        max_tokens: None,
-    })
+    let config = cfg::load_config()?;
+    let resolved = resolve_quick_enhance_input(&config, &prompt)?;
+    let result = enhance_with_loaded_config(
+        ConfiguredEnhanceRequest {
+            prompt: resolved.prompt.clone(),
+            platform: Some(resolved.resolution.platform.to_string()),
+            enhancement_type: Some(EnhanceType::Text),
+            include_memory: false,
+            style_hints: None,
+            max_tokens: None,
+        },
+        config,
+    )
     .await?;
 
     let enhanced_prompt = result.response.enhanced_prompt.clone();
     app.clipboard().write_text(&enhanced_prompt)?;
     record_prompt_history_if_enabled(NewPromptHistoryRecord {
-        original_prompt,
+        original_prompt: resolved.prompt,
         enhanced_prompt: enhanced_prompt.clone(),
         enhancement_type: result.enhancement_type,
         platform: result.response.platform,
         provider: result.provider,
         model: result.model,
     });
-    Ok(enhanced_prompt)
+    Ok(QuickEnhanceOutcome {
+        enhanced_prompt,
+        resolution: resolved.resolution,
+    })
+}
+
+fn quick_enhance_success_message(resolution: &TargetResolution) -> String {
+    match resolution.source {
+        ResolutionSource::ExplicitPrefix => {
+            format!(
+                "Enhanced for {} ({}).",
+                resolution.platform.label(),
+                resolution.reason
+            )
+        }
+        ResolutionSource::ConfigDefault => {
+            format!("Enhanced for {}.", resolution.platform.label())
+        }
+    }
 }
 
 fn record_prompt_history_if_enabled(record: NewPromptHistoryRecord) {
@@ -300,22 +337,22 @@ pub fn save_settings(
     config.byok.model = model;
 
     let default_platform = parse_platform(&default_platform)
-        .ok_or_else(|| "Default platform must be claude, openai, gemini, or generic".to_string())?;
+        .ok_or_else(|| format!("Default platform must be {}", TEXT_PLATFORM_HELP))?;
     if !default_platform.is_text_platform() {
-        return Err("Default platform must be claude, openai, gemini, or generic".to_string());
+        return Err(format!("Default platform must be {}", TEXT_PLATFORM_HELP));
     }
     config.default_platform = default_platform;
 
     if let Some(default_image_platform) = default_image_platform {
-        let default_image_platform = parse_platform(&default_image_platform).ok_or_else(|| {
-            "Default image platform must be midjourney, dalle, sd, or generic".to_string()
-        })?;
+        let default_image_platform = parse_platform(&default_image_platform)
+            .ok_or_else(|| format!("Default image platform must be {}", IMAGE_PLATFORM_HELP))?;
         if !default_image_platform.is_image_platform()
             && default_image_platform != Platform::Generic
         {
-            return Err(
-                "Default image platform must be midjourney, dalle, sd, or generic".to_string(),
-            );
+            return Err(format!(
+                "Default image platform must be {}",
+                IMAGE_PLATFORM_HELP
+            ));
         }
         config.default_image_platform = default_image_platform;
     }

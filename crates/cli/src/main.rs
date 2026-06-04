@@ -13,7 +13,7 @@ struct Cli {
     /// Prompt to enhance (text mode by default)
     prompt: Option<String>,
 
-    /// Target platform (claude, openai, gemini, generic, midjourney, dalle, sd)
+    /// Target platform (claude, claude-code, openai, gemini, cursor, codex, coding-agent, generic, midjourney, dalle, sd)
     #[arg(short, long)]
     platform: Option<String>,
 

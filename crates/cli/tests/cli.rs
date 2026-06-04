@@ -248,6 +248,31 @@ fn enhance_missing_openrouter_key_prints_actionable_message() {
     );
 }
 
+#[test]
+fn enhance_accepts_coding_agent_platforms_before_provider_setup() {
+    let env = TestEnv::new("coding-agent-platforms");
+
+    for platform in ["claude-code", "cursor", "codex", "coding-agent"] {
+        let output = env
+            .proompt()
+            .args(["--platform", platform, "fix upload bug"])
+            .output()
+            .unwrap();
+
+        assert_failure(output.clone());
+        let stderr = stderr(&output);
+        assert!(stderr.contains("openai.api_key"), "stderr was:\n{stderr}");
+        assert!(
+            !stderr.contains("Invalid platform"),
+            "stderr was:\n{stderr}"
+        );
+        assert!(
+            !stderr.contains("Text enhancement requires"),
+            "stderr was:\n{stderr}"
+        );
+    }
+}
+
 fn assert_success(output: Output) {
     assert!(
         output.status.success(),

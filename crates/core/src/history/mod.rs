@@ -277,6 +277,23 @@ mod tests {
         assert!(store.load().unwrap().is_empty());
     }
 
+    #[test]
+    fn append_serializes_coding_agent_platform() {
+        let path = temp_history_path("coding-agent-platform");
+        let store = HistoryStore::new(&path);
+
+        store
+            .append(NewPromptHistoryRecord {
+                platform: Platform::ClaudeCode,
+                ..sample_record("fix upload bug", "enhanced task")
+            })
+            .unwrap();
+
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains(r#""platform": "claude-code""#));
+        assert_eq!(store.load().unwrap()[0].platform, Platform::ClaudeCode);
+    }
+
     fn sample_record(original: &str, enhanced: &str) -> NewPromptHistoryRecord {
         NewPromptHistoryRecord {
             original_prompt: original.to_string(),

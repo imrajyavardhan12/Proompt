@@ -4,8 +4,14 @@ pub fn parse_platform(input: &str) -> Option<Platform> {
     let lower = input.trim().to_lowercase();
     Some(match lower.as_str() {
         "claude" | "anthropic" => Platform::Claude,
+        "claude-code" | "claudecode" | "claude_code" | "cc" => Platform::ClaudeCode,
         "openai" | "gpt" | "chatgpt" => Platform::OpenAI,
         "gemini" | "google" => Platform::Gemini,
+        "cursor" => Platform::Cursor,
+        "codex" | "openai-codex" | "openai_codex" => Platform::Codex,
+        "coding-agent" | "coding_agent" | "agent" | "generic-agent" | "generic_agent" => {
+            Platform::CodingAgent
+        }
         "midjourney" | "mj" => Platform::Midjourney,
         "dalle" | "dall-e" | "dall_e" => Platform::DallE,
         "sd" | "stablediffusion" | "stable-diffusion" | "stable_diffusion" => {
@@ -48,6 +54,19 @@ mod tests {
     fn test_parse_platform_rejects_unknown() {
         assert_eq!(parse_platform("generic"), Some(Platform::Generic));
         assert_eq!(parse_platform("unknown"), None);
+    }
+
+    #[test]
+    fn test_parse_coding_agent_platform_aliases() {
+        assert_eq!(parse_platform("claude-code"), Some(Platform::ClaudeCode));
+        assert_eq!(parse_platform("claudecode"), Some(Platform::ClaudeCode));
+        assert_eq!(parse_platform("cc"), Some(Platform::ClaudeCode));
+        assert_eq!(parse_platform("cursor"), Some(Platform::Cursor));
+        assert_eq!(parse_platform("codex"), Some(Platform::Codex));
+        assert_eq!(parse_platform("openai-codex"), Some(Platform::Codex));
+        assert_eq!(parse_platform("coding-agent"), Some(Platform::CodingAgent));
+        assert_eq!(parse_platform("agent"), Some(Platform::CodingAgent));
+        assert_eq!(parse_platform("generic-agent"), Some(Platform::CodingAgent));
     }
 
     #[test]
