@@ -2,7 +2,7 @@
 
 Last updated: 2026-06-04
 Target release: v0.2.0
-Status: planned
+Status: implemented in feature branch; pending release
 
 ## Purpose
 
@@ -12,7 +12,13 @@ This is the next strategic wedge after quick enhance and local history because d
 
 ## Product goal
 
-Make Proompt the fastest way to compose high-quality AI coding tasks from rough intent.
+Make Proompt the fastest way to compose high-quality AI coding tasks from rough intent without leaving the tool the user is already using.
+
+The primary workflow is Quick Enhance, not opening the app:
+
+```text
+copy rough task anywhere -> press Cmd/Ctrl+Shift+E -> paste into coding agent
+```
 
 A user should be able to write:
 
@@ -41,6 +47,17 @@ proompt --platform cursor "add auth middleware"
 proompt --platform codex "write tests for billing edge cases"
 proompt --platform coding-agent "refactor config loading"
 ```
+
+Quick Enhance prefix overrides:
+
+```text
+/cc fix upload bug
+/cursor add auth middleware
+/codex write tests for billing edge cases
+/agent refactor config loading
+```
+
+Proompt strips the prefix before sending the prompt to the provider.
 
 ## Desired output shape
 
@@ -194,7 +211,24 @@ Tasks:
   - Coding agents: Claude Code, Cursor, Codex, Coding Agent
 - Keep default text platform unchanged for now.
 
-### 5. History compatibility
+### 5. Quick Enhance routing
+
+Files:
+
+- `crates/core/src/routing.rs`
+- `app/src-tauri/src/commands.rs`
+- `app/src/lib/components/SettingsPanel.svelte`
+- `app/src/lib/components/EnhancePanel.svelte`
+
+Tasks:
+
+- Keep Quick Enhance hotkey as the primary workflow.
+- Add prefix routing for `/cc`, `/cursor`, `/codex`, `/agent`, `/gpt`, `/claude`, and `/gemini`.
+- Strip routing prefixes before enhancement.
+- Notify the user which target was used.
+- Clarify Settings copy: Quick Enhance target, not generic default platform.
+
+### 6. History compatibility
 
 No schema change should be required. New platforms serialize through the existing `Platform` enum and should appear in local history like other platforms.
 
@@ -207,6 +241,7 @@ Verify:
 
 - CLI accepts each new coding-agent platform.
 - Desktop exposes each new coding-agent platform in text mode.
+- Quick Enhance can route with explicit prefixes without opening the app.
 - Generated prompts are coding-task-specific, not generic prompt rewrites.
 - Existing text/image platforms still work.
 - Local history records new platforms correctly.

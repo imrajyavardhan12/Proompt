@@ -298,15 +298,24 @@
     <p class="hint">Stored in your OS keychain. Paste a key above to test it before saving.</p>
   </section>
 
-  <!-- Default Platform -->
+  <!-- Quick Enhance Target -->
   <section class="section">
-    <div class="section-label">Default platform</div>
+    <div class="section-label">Quick Enhance target</div>
+    <p class="hint" style="margin: 0 0 8px">Used by {quickEnhanceHotkeyDisplay} for clipboard text when no /prefix override is present.</p>
     <div class="select-wrap">
       <select bind:value={defaultPlatform}>
-        <option value="claude">Claude</option>
-        <option value="openai">OpenAI</option>
-        <option value="gemini">Gemini</option>
-        <option value="generic">Generic</option>
+        <optgroup label="Chat assistants">
+          <option value="claude">Claude</option>
+          <option value="openai">OpenAI</option>
+          <option value="gemini">Gemini</option>
+          <option value="generic">Generic</option>
+        </optgroup>
+        <optgroup label="Coding agents">
+          <option value="claude-code">Claude Code</option>
+          <option value="cursor">Cursor</option>
+          <option value="codex">Codex</option>
+          <option value="coding-agent">Coding Agent</option>
+        </optgroup>
       </select>
     </div>
   </section>
@@ -330,7 +339,7 @@
     <div class="hotkey-card">
       <div>
         <span class="hotkey-name">Quick Enhance</span>
-        <p class="hint" style="margin: 2px 0 0">Reads clipboard, enhances it, and copies the result back.</p>
+        <p class="hint" style="margin: 2px 0 0">Reads clipboard, routes by /prefix or target above, enhances it, and copies the result back.</p>
       </div>
       <kbd>{quickEnhanceHotkeyDisplay}</kbd>
     </div>

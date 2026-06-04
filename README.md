@@ -1,8 +1,8 @@
 # Proompt
 
-A desktop app and CLI that turns rough prompts into optimized ones for AI assistants and image generators.
+A desktop app and CLI that turns rough prompts into execution-ready AI tasks for coding agents, AI assistants, and image generators.
 
-You type "make a sorting function", and Proompt rewrites it into a well-structured prompt with context, constraints, and platform-specific formatting -- ready for Claude, GPT, Gemini, Midjourney, DALL-E, or Stable Diffusion.
+You type "fix upload bug", and Proompt rewrites it into a well-structured prompt with context, constraints, acceptance criteria, and platform-specific formatting -- ready for Claude Code, Cursor, Codex, Claude, GPT, Gemini, Midjourney, DALL-E, or Stable Diffusion.
 
 ## How it works
 
@@ -10,7 +10,7 @@ You type "make a sorting function", and Proompt rewrites it into a well-structur
 your rough prompt  -->  Proompt  -->  platform-optimized prompt
 ```
 
-Proompt sends your input through an LLM with carefully tuned system prompts that know the quirks of each target platform. Claude gets XML tags. GPT gets structured markdown. Midjourney gets style parameters and aspect ratios. You bring your own API key.
+Proompt sends your input through an LLM with carefully tuned system prompts that know the quirks of each target platform. Claude Code gets repo-investigation workflow and acceptance criteria. Cursor gets minimal-diff IDE guidance. GPT gets structured markdown. Midjourney gets style parameters and aspect ratios. You bring your own API key.
 
 ## Install
 
@@ -53,14 +53,41 @@ For development with hot-reload: `bunx tauri dev`
 
 ## Usage
 
+### Quick Enhance from anywhere
+
+The fastest workflow is the global hotkey. Use the app once to set your **Quick Enhance target** (for example Claude Code), then stay in your current tool:
+
+```text
+copy rough task -> press Cmd/Ctrl+Shift+E -> paste enhanced prompt
+```
+
+For coding agents, prefix clipboard text to override the target without opening Proompt:
+
+```text
+/cc fix upload bug                 -> Claude Code
+/cursor add auth middleware        -> Cursor
+/codex write billing edge tests    -> Codex
+/agent refactor config loading     -> generic coding agent
+/gpt make this clearer             -> GPT
+/claude explain this tradeoff      -> Claude
+```
+
+Proompt strips the prefix, enhances for that target, copies the result, and notifies which target was used.
+
 ### CLI
 
 ```bash
 # text prompt (streams on OpenAI)
 proompt "explain kubernetes in simple terms"
 
-# target a specific platform
+# target a specific chat assistant
 proompt --platform claude "sort users by age and filter inactive"
+
+# compose a task for a coding agent
+proompt --platform claude-code "fix upload bug"
+proompt --platform cursor "add auth middleware"
+proompt --platform codex "write tests for billing edge cases"
+proompt --platform coding-agent "refactor config loading"
 
 # image prompt
 proompt --image "a cat floating in space"
@@ -83,7 +110,8 @@ proompt templates list
 
 Four tabs: Enhance, History, Templates, Settings.
 
-- Pick text or image mode, choose a target platform, type your prompt, hit Enhance
+- Set your Quick Enhance target for the global hotkey
+- Pick text or image mode, choose a target platform, type your prompt, hit Enhance when you want a visible workspace
 - Review local prompt history, favorite useful prompts, copy enhanced output, or reuse originals
 - Browse 10 built-in templates for common tasks (code review, Ghibli-style images, etc.)
 - Settings has provider/model switching, API key management, local history controls, and connection testing
@@ -160,9 +188,7 @@ The release workflow builds CLI archives for Linux/macOS/Windows and a macOS App
 
 ## Status
 
-Milestones 1 and 2 are complete -- core engine, multi-provider support, OpenRouter, streaming, CLI with animations, desktop app with full UI, local history, and CI. 53 tests passing.
-
-Next planned feature: Coding Agent Mode for Claude Code, Cursor, Codex, and generic coding agents. See `docs/coding-agent-mode.md`.
+Milestones 1 and 2 are complete -- core engine, multi-provider support, OpenRouter, streaming, CLI with animations, desktop app with full UI, local history, and CI. v0.2.0 adds hotkey-first Coding Agent Mode for Claude Code, Cursor, Codex, and generic coding agents. See `docs/coding-agent-mode.md`.
 
 Not yet built: Supabase auth, Stripe billing, hosted mode, code signing.
 
