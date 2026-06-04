@@ -162,6 +162,8 @@ The release workflow builds CLI archives for Linux/macOS/Windows and a macOS App
 
 Milestones 1 and 2 are complete -- core engine, multi-provider support, OpenRouter, streaming, CLI with animations, desktop app with full UI, local history, and CI. 53 tests passing.
 
+Next planned feature: Coding Agent Mode for Claude Code, Cursor, Codex, and generic coding agents. See `docs/coding-agent-mode.md`.
+
 Not yet built: Supabase auth, Stripe billing, hosted mode, code signing.
 
 ## License
