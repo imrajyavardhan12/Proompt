@@ -92,7 +92,7 @@
     </div>
 
     <div class="sidebar-bottom">
-      <div class="version">v0.1.3</div>
+      <div class="version">v0.1.4</div>
     </div>
   </aside>
 
