@@ -9,7 +9,7 @@ use proompt_core::{
     history::{self, NewPromptHistoryRecord, PromptHistoryRecord},
     platform::{EnhanceType, Platform, parse_platform},
     routing::{
-        ActiveApp, BrowserContext, EnvironmentSnapshot, ResolutionSource, TargetResolution,
+        ActiveApp, BrowserContext, EnvironmentSnapshot, TargetResolution,
         resolve_quick_enhance_input_with_environment,
     },
     templates::{Template, TemplateFilter, TemplateManager},
@@ -54,6 +54,15 @@ pub struct ProviderSetupStatus {
     pub api_key_error: Option<String>,
     pub env_var: String,
     pub cli_command: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickEnhanceRouteInspection {
+    pub prompt_preview: Option<String>,
+    pub environment: Option<EnvironmentSnapshot>,
+    pub resolution: Option<TargetResolution>,
+    pub error: Option<String>,
 }
 
 pub fn register_quick_enhance_shortcut(app: &AppHandle) {
@@ -127,6 +136,7 @@ pub async fn enhance_prompt(
         platform: result.response.platform,
         provider: result.provider,
         model: result.model,
+        routing: None,
     });
 
     Ok(enhanced_prompt)
@@ -183,6 +193,7 @@ async fn quick_enhance_clipboard_inner(app: AppHandle) -> anyhow::Result<QuickEn
         platform: result.response.platform,
         provider: result.provider,
         model: result.model,
+        routing: Some(resolved.resolution.clone().into()),
     });
     Ok(QuickEnhanceOutcome {
         enhanced_prompt,
@@ -191,13 +202,53 @@ async fn quick_enhance_clipboard_inner(app: AppHandle) -> anyhow::Result<QuickEn
 }
 
 fn quick_enhance_success_message(resolution: &TargetResolution) -> String {
-    match resolution.source {
-        ResolutionSource::ConfigDefault => format!("Enhanced for {}.", resolution.platform.label()),
-        _ => format!(
-            "Enhanced for {} ({}).",
-            resolution.platform.label(),
-            resolution.reason
-        ),
+    format!(
+        "Enhanced for {} — {}.",
+        resolution.platform.label(),
+        resolution.reason
+    )
+}
+
+#[tauri::command]
+pub fn inspect_quick_enhance_route(app: AppHandle) -> Result<QuickEnhanceRouteInspection, String> {
+    let config = cfg::load_config().map_err(|e| e.to_string())?;
+    let environment = collect_environment_snapshot();
+    let prompt = match app.clipboard().read_text() {
+        Ok(prompt) => prompt,
+        Err(e) => {
+            return Ok(QuickEnhanceRouteInspection {
+                prompt_preview: None,
+                environment,
+                resolution: None,
+                error: Some(format!("Could not read clipboard: {}", e)),
+            });
+        }
+    };
+
+    let prompt = prompt.trim();
+    if prompt.is_empty() {
+        return Ok(QuickEnhanceRouteInspection {
+            prompt_preview: None,
+            environment,
+            resolution: None,
+            error: Some("Clipboard is empty. Copy a rough prompt to preview routing.".to_string()),
+        });
+    }
+
+    let prompt_preview = truncate_chars(prompt, 120);
+    match resolve_quick_enhance_input_with_environment(&config, prompt, environment.as_ref()) {
+        Ok(resolved) => Ok(QuickEnhanceRouteInspection {
+            prompt_preview: Some(prompt_preview),
+            environment,
+            resolution: Some(resolved.resolution),
+            error: None,
+        }),
+        Err(e) => Ok(QuickEnhanceRouteInspection {
+            prompt_preview: Some(prompt_preview),
+            environment,
+            resolution: None,
+            error: Some(e.to_string()),
+        }),
     }
 }
 
@@ -359,6 +410,13 @@ fn collect_active_app() -> Option<(ActiveApp, Option<String>)> {
 #[cfg(not(target_os = "macos"))]
 fn collect_browser_context(_active_app: &ActiveApp) -> Option<BrowserContext> {
     None
+}
+
+fn truncate_chars(s: &str, max: usize) -> String {
+    match s.char_indices().nth(max) {
+        Some((idx, _)) => format!("{}...", &s[..idx]),
+        None => s.to_string(),
+    }
 }
 
 fn record_prompt_history_if_enabled(record: NewPromptHistoryRecord) {

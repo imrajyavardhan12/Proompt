@@ -1,6 +1,12 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
 
+  interface PromptRoutingMetadata {
+    source: string;
+    confidence: string;
+    reason: string;
+  }
+
   interface PromptHistoryRecord {
     id: string;
     original_prompt: string;
@@ -11,6 +17,7 @@
     model: string;
     created_at_ms: number;
     favorite: boolean;
+    routing?: PromptRoutingMetadata | null;
   }
 
   interface HistoryReuseDraft {
@@ -40,6 +47,9 @@
         record.platform,
         record.provider,
         record.model,
+        record.routing?.source ?? "",
+        record.routing?.confidence ?? "",
+        record.routing?.reason ?? "",
       ].some((value) => value.toLowerCase().includes(query));
     })
   );
@@ -143,6 +153,27 @@
     return labels[platform] ?? platform;
   }
 
+  function routingSourceLabel(source: string) {
+    const labels: Record<string, string> = {
+      explicit_prefix: "Explicit prefix",
+      active_app: "Active app",
+      browser_context: "Browser context",
+      terminal_default: "Terminal default",
+      config_default: "Quick Enhance fallback",
+    };
+    return labels[source] ?? source;
+  }
+
+  function routingConfidenceLabel(confidence: string) {
+    const labels: Record<string, string> = {
+      explicit: "explicit",
+      high: "high confidence",
+      medium: "medium confidence",
+      fallback: "fallback",
+    };
+    return labels[confidence] ?? confidence;
+  }
+
   function truncate(text: string, max = 220) {
     return text.length > max ? `${text.slice(0, max)}…` : text;
   }
@@ -199,6 +230,13 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill={record.favorite ? "currentColor" : "none"} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             </button>
           </div>
+
+          {#if record.routing}
+            <div class="route-line">
+              <span class="route-badge">Quick Enhance</span>
+              <span>{routingSourceLabel(record.routing.source)} · {routingConfidenceLabel(record.routing.confidence)} · {record.routing.reason}</span>
+            </div>
+          {/if}
 
           <div class="prompt-block">
             <span class="block-label">Original</span>
@@ -434,6 +472,31 @@
     color: #fbbf24;
     border-color: rgba(251, 191, 36, 0.25);
     background: rgba(251, 191, 36, 0.08);
+  }
+
+  .route-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 10px;
+    background: rgba(16, 185, 129, 0.06);
+    border: 1px solid rgba(16, 185, 129, 0.12);
+    border-radius: 9px;
+    color: #86efac;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .route-badge {
+    padding: 2px 6px;
+    border-radius: 5px;
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+    text-transform: uppercase;
+    letter-spacing: 0.45px;
+    font-size: 9px;
+    font-weight: 700;
   }
 
   .prompt-block {

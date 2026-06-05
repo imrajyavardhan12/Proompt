@@ -54,6 +54,15 @@ pub fn list(limit: usize, favorites_only: bool) -> Result<()> {
             muted.apply_to("enhanced:"),
             truncate(&record.enhanced_prompt, 96)
         );
+        if let Some(routing) = &record.routing {
+            eprintln!(
+                "    {} {} · {} · {}",
+                muted.apply_to("route:"),
+                accent.apply_to(routing.source.label()),
+                muted.apply_to(routing.confidence.label()),
+                truncate(&routing.reason, 96)
+            );
+        }
         eprintln!();
     }
 

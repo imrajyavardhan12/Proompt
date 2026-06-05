@@ -42,7 +42,8 @@ pub struct TerminalContext {
     pub shell_name: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ResolutionSource {
     ExplicitPrefix,
     ActiveApp,
@@ -51,7 +52,20 @@ pub enum ResolutionSource {
     ConfigDefault,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+impl ResolutionSource {
+    pub fn label(&self) -> &'static str {
+        match self {
+            ResolutionSource::ExplicitPrefix => "Explicit prefix",
+            ResolutionSource::ActiveApp => "Active app",
+            ResolutionSource::BrowserContext => "Browser context",
+            ResolutionSource::TerminalDefault => "Terminal default",
+            ResolutionSource::ConfigDefault => "Quick Enhance fallback",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ResolutionConfidence {
     Explicit,
     High,
@@ -59,7 +73,18 @@ pub enum ResolutionConfidence {
     Fallback,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl ResolutionConfidence {
+    pub fn label(&self) -> &'static str {
+        match self {
+            ResolutionConfidence::Explicit => "Explicit",
+            ResolutionConfidence::High => "High",
+            ResolutionConfidence::Medium => "Medium",
+            ResolutionConfidence::Fallback => "Fallback",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TargetResolution {
     pub platform: Platform,
     pub source: ResolutionSource,
@@ -183,7 +208,7 @@ fn default_resolution(config: &Config) -> TargetResolution {
         platform,
         source: ResolutionSource::ConfigDefault,
         confidence: ResolutionConfidence::Fallback,
-        reason: "using Quick Enhance target".to_string(),
+        reason: "using Quick Enhance fallback target".to_string(),
     }
 }
 

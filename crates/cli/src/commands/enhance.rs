@@ -146,6 +146,7 @@ fn record_history(prompt: &str, result: &ConfiguredEnhanceResponse, save_history
         platform: result.response.platform,
         provider: result.provider.clone(),
         model: result.model.clone(),
+        routing: None,
     }) {
         output::warn(&format!("Could not save prompt history: {}", e));
     }

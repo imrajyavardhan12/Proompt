@@ -3,6 +3,18 @@
 
   let { initialProvider = null } = $props<{ initialProvider?: string | null }>();
 
+  interface QuickEnhanceRouteInspection {
+    promptPreview?: string | null;
+    environment?: any;
+    resolution?: {
+      platform: string;
+      source: string;
+      confidence: string;
+      reason: string;
+    } | null;
+    error?: string | null;
+  }
+
   let mode = $state("byok");
   let provider = $state("openai");
   let model = $state("gpt-4o");
@@ -16,6 +28,8 @@
   let supermemoryEnabled = $state(false);
   let supermemoryKey = $state("");
   let status = $state<{ type: "success" | "error"; text: string } | null>(null);
+  let routeInspection = $state<QuickEnhanceRouteInspection | null>(null);
+  let routeInspecting = $state(false);
   let testingConnection = $state(false);
   let saving = $state(false);
 
@@ -173,6 +187,52 @@
       return "OpenAI model must start with gpt, chatgpt, o1, o3, or o4";
     }
     return "";
+  }
+
+  async function inspectRoute() {
+    routeInspecting = true;
+    try {
+      routeInspection = await invoke<QuickEnhanceRouteInspection>("inspect_quick_enhance_route");
+    } catch (e: any) {
+      routeInspection = { error: e?.toString?.() ?? `${e}` };
+    } finally {
+      routeInspecting = false;
+    }
+  }
+
+  function platformLabel(platform: string) {
+    const labels: Record<string, string> = {
+      claude: "Claude",
+      "claude-code": "Claude Code",
+      openai: "GPT",
+      gemini: "Gemini",
+      cursor: "Cursor",
+      codex: "Codex",
+      "coding-agent": "Coding Agent",
+      generic: "Generic",
+    };
+    return labels[platform] ?? platform;
+  }
+
+  function routingSourceLabel(source: string) {
+    const labels: Record<string, string> = {
+      explicit_prefix: "Explicit prefix",
+      active_app: "Active app",
+      browser_context: "Browser context",
+      terminal_default: "Terminal default",
+      config_default: "Quick Enhance fallback",
+    };
+    return labels[source] ?? source;
+  }
+
+  function routingConfidenceLabel(confidence: string) {
+    const labels: Record<string, string> = {
+      explicit: "explicit",
+      high: "high confidence",
+      medium: "medium confidence",
+      fallback: "fallback",
+    };
+    return labels[confidence] ?? confidence;
   }
 
   async function testConnection() {
@@ -354,6 +414,56 @@
         <option value="gemini">Gemini</option>
         <option value="generic">Generic</option>
       </select>
+    </div>
+
+    <div class="diagnostic-card">
+      <div class="diagnostic-top">
+        <div>
+          <span class="diagnostic-title">Clipboard route preview</span>
+          <p class="hint" style="margin: 2px 0 0">Preview saved-settings and /prefix routing. Actual hotkey active-app routes are recorded in History.</p>
+        </div>
+        <button class="btn-secondary" onclick={inspectRoute} disabled={routeInspecting}>
+          {routeInspecting ? "Inspecting..." : "Inspect"}
+        </button>
+      </div>
+
+      {#if routeInspection}
+        {#if routeInspection.error}
+          <div class="diagnostic-error">{routeInspection.error}</div>
+        {/if}
+
+        {#if routeInspection.resolution}
+          <div class="diagnostic-result">
+            <span>Resolved target</span>
+            <strong>{platformLabel(routeInspection.resolution.platform)}</strong>
+            <small>{routingSourceLabel(routeInspection.resolution.source)} · {routingConfidenceLabel(routeInspection.resolution.confidence)} · {routeInspection.resolution.reason}</small>
+          </div>
+        {/if}
+
+        {#if routeInspection.promptPreview}
+          <div class="diagnostic-row">
+            <span>Clipboard</span>
+            <code>{routeInspection.promptPreview}</code>
+          </div>
+        {/if}
+
+        {#if routeInspection.environment}
+          <div class="diagnostic-grid">
+            <div>
+              <span>Active app</span>
+              <strong>{routeInspection.environment.active_app?.name ?? "Unknown"}</strong>
+            </div>
+            <div>
+              <span>Window</span>
+              <strong>{routeInspection.environment.window_title ?? "Unavailable"}</strong>
+            </div>
+            <div>
+              <span>Browser URL</span>
+              <strong>{routeInspection.environment.browser_context?.url ?? "Unavailable"}</strong>
+            </div>
+          </div>
+        {/if}
+      {/if}
     </div>
   </section>
 
@@ -653,6 +763,101 @@
     color: #a1a1aa;
     font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
     font-size: 10.5px;
+  }
+
+  /* ── Routing diagnostics ──────────── */
+
+  .diagnostic-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 12px;
+    background: #0f0f12;
+    border: 1px solid #1a1a1e;
+    border-radius: 10px;
+  }
+
+  .diagnostic-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .diagnostic-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e4e4e7;
+  }
+
+  .diagnostic-error {
+    padding: 8px 10px;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.16);
+    color: #fca5a5;
+    border-radius: 8px;
+    font-size: 11.5px;
+  }
+
+  .diagnostic-result {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 10px;
+    background: rgba(16, 185, 129, 0.06);
+    border: 1px solid rgba(16, 185, 129, 0.14);
+    border-radius: 8px;
+  }
+
+  .diagnostic-result span,
+  .diagnostic-row span,
+  .diagnostic-grid span {
+    font-size: 10px;
+    color: #52525b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+  }
+
+  .diagnostic-result strong {
+    color: #34d399;
+    font-size: 13px;
+  }
+
+  .diagnostic-result small {
+    color: #86efac;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .diagnostic-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .diagnostic-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .diagnostic-grid div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .diagnostic-grid strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #a1a1aa;
+    font-size: 11px;
+    font-weight: 500;
   }
 
   /* ── Buttons ──────────────────────── */

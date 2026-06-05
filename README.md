@@ -72,7 +72,7 @@ For coding agents, prefix clipboard text to override the target without opening 
 /claude explain this tradeoff      -> Claude
 ```
 
-Proompt strips the prefix, enhances for that target, copies the result, and notifies which target was used. When auto-detect is enabled, Quick Enhance can route from active apps such as Cursor, ChatGPT, Claude, supported browser window titles, or a configured terminal default.
+Proompt strips the prefix, enhances for that target, copies the result, and notifies which target was used and why. When auto-detect is enabled, Quick Enhance can route from active apps such as Cursor, ChatGPT, Claude, supported browser window titles, or a configured terminal default. Settings includes a local clipboard route preview, and History records actual hotkey routing decisions.
 
 ### CLI
 
@@ -141,7 +141,7 @@ Environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, 
 
 ## Local history
 
-Successful enhancements are saved locally on your device so you can search, favorite, copy, and reuse previous prompts. Disable this anytime:
+Successful enhancements are saved locally on your device so you can search, favorite, copy, and reuse previous prompts. Quick Enhance history entries also show the routing source, confidence, and reason. Disable history anytime:
 
 ```bash
 proompt config set preferences.save_history false

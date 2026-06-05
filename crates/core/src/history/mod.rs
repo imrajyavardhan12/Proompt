@@ -9,7 +9,10 @@ use std::{
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::platform::{EnhanceType, Platform};
+use crate::{
+    platform::{EnhanceType, Platform},
+    routing::{ResolutionConfidence, ResolutionSource, TargetResolution},
+};
 
 const DEFAULT_MAX_HISTORY_RECORDS: usize = 500;
 static HISTORY_ID_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -26,6 +29,25 @@ pub struct PromptHistoryRecord {
     pub created_at_ms: u64,
     #[serde(default)]
     pub favorite: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing: Option<PromptRoutingMetadata>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PromptRoutingMetadata {
+    pub source: ResolutionSource,
+    pub confidence: ResolutionConfidence,
+    pub reason: String,
+}
+
+impl From<TargetResolution> for PromptRoutingMetadata {
+    fn from(resolution: TargetResolution) -> Self {
+        Self {
+            source: resolution.source,
+            confidence: resolution.confidence,
+            reason: resolution.reason,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,6 +58,7 @@ pub struct NewPromptHistoryRecord {
     pub platform: Platform,
     pub provider: String,
     pub model: String,
+    pub routing: Option<PromptRoutingMetadata>,
 }
 
 #[derive(Debug, Clone)]
@@ -88,6 +111,7 @@ impl HistoryStore {
             model: input.model.trim().to_string(),
             created_at_ms: now_ms(),
             favorite: false,
+            routing: input.routing,
         };
 
         records.insert(0, record.clone());
@@ -294,6 +318,62 @@ mod tests {
         assert_eq!(store.load().unwrap()[0].platform, Platform::ClaudeCode);
     }
 
+    #[test]
+    fn append_persists_quick_enhance_routing_metadata() {
+        let path = temp_history_path("routing-metadata");
+        let store = HistoryStore::new(&path);
+
+        store
+            .append(NewPromptHistoryRecord {
+                platform: Platform::ClaudeCode,
+                routing: Some(PromptRoutingMetadata {
+                    source: ResolutionSource::ExplicitPrefix,
+                    confidence: ResolutionConfidence::Explicit,
+                    reason: "via /cc".to_string(),
+                }),
+                ..sample_record("fix upload bug", "enhanced task")
+            })
+            .unwrap();
+
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains(r#""source": "explicit_prefix""#));
+        assert!(content.contains(r#""confidence": "explicit""#));
+
+        let loaded = store.load().unwrap();
+        let routing = loaded[0].routing.as_ref().unwrap();
+        assert_eq!(routing.source, ResolutionSource::ExplicitPrefix);
+        assert_eq!(routing.confidence, ResolutionConfidence::Explicit);
+        assert_eq!(routing.reason, "via /cc");
+    }
+
+    #[test]
+    fn load_accepts_legacy_history_without_routing_metadata() {
+        let path = temp_history_path("legacy-no-routing");
+        fs::write(
+            &path,
+            r#"[
+              {
+                "id": "hist_legacy",
+                "original_prompt": "rough",
+                "enhanced_prompt": "enhanced",
+                "enhancement_type": "text",
+                "platform": "claude",
+                "provider": "openai",
+                "model": "gpt-4o",
+                "created_at_ms": 1,
+                "favorite": false
+              }
+            ]"#,
+        )
+        .unwrap();
+        let store = HistoryStore::new(&path);
+
+        let loaded = store.load().unwrap();
+
+        assert_eq!(loaded.len(), 1);
+        assert!(loaded[0].routing.is_none());
+    }
+
     fn sample_record(original: &str, enhanced: &str) -> NewPromptHistoryRecord {
         NewPromptHistoryRecord {
             original_prompt: original.to_string(),
@@ -302,6 +382,7 @@ mod tests {
             platform: Platform::Claude,
             provider: "openai".to_string(),
             model: "gpt-4o".to_string(),
+            routing: None,
         }
     }
 
