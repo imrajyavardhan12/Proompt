@@ -24,6 +24,7 @@
     provider: string;
     model: string;
     api_key_configured: boolean;
+    api_key_status?: "env_configured" | "deferred" | "hosted_unavailable" | "missing" | "error";
     api_key_error?: string | null;
     env_var: string;
     cli_command: string;
@@ -90,7 +91,7 @@
 
   let platforms = $derived(mode === "text" ? textPlatforms : imagePlatforms);
   let isResultStale = $derived(!!enhancedPrompt && (platform !== resultPlatform || mode !== resultMode));
-  let providerNeedsSetup = $derived(Boolean(providerSetup && providerSetup.mode === "byok" && !providerSetup.api_key_configured));
+  let providerNeedsSetup = $derived(Boolean(providerSetup && providerSetup.mode === "byok" && providerSetup.api_key_status === "missing"));
   let hostedModeUnavailable = $derived(Boolean(providerSetup && providerSetup.mode === "hosted"));
   let missingKeyError = $derived(isMissingApiKeyError(error));
   let hostedModeError = $derived(isHostedModeError(error));

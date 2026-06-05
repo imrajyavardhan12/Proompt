@@ -80,12 +80,8 @@ pub fn get_api_key(service: &str) -> Result<String> {
     }
 
     // 1. Check environment variables first (no keychain prompt)
-    for env_var in api_key_env_vars_for_service(&service) {
-        if let Ok(key) = std::env::var(env_var)
-            && !key.is_empty()
-        {
-            return Ok(key);
-        }
+    if let Some(key) = get_api_key_from_env(&service) {
+        return Ok(key);
     }
 
     if keychain_disabled() {
@@ -123,6 +119,20 @@ pub fn get_api_key(service: &str) -> Result<String> {
         service,
         last_error.unwrap_or_else(|| "not found".to_string())
     ))
+}
+
+pub fn get_api_key_from_env(service: &str) -> Option<String> {
+    get_api_key_from_env_with(service, |env_var| std::env::var(env_var).ok())
+}
+
+fn get_api_key_from_env_with(
+    service: &str,
+    mut get_env: impl FnMut(&str) -> Option<String>,
+) -> Option<String> {
+    let service = api_key_service_name(service);
+    api_key_env_vars_for_service(&service)
+        .iter()
+        .find_map(|env_var| get_env(env_var).filter(|key| !key.is_empty()))
 }
 
 fn keychain_disabled() -> bool {
@@ -165,6 +175,24 @@ mod tests {
         assert!(config.quick_enhance.auto_detect_target);
         assert_eq!(config.quick_enhance.terminal_platform, None);
         assert!(!config.supermemory.enabled);
+    }
+
+    #[test]
+    fn get_api_key_from_env_with_uses_provider_env_vars_without_keychain() {
+        let key = get_api_key_from_env_with("openrouter", |env_var| {
+            (env_var == "OPENROUTER_API_KEY").then(|| "sk-or-test".to_string())
+        });
+
+        assert_eq!(key.as_deref(), Some("sk-or-test"));
+    }
+
+    #[test]
+    fn get_api_key_from_env_with_ignores_empty_values() {
+        let key = get_api_key_from_env_with("openai", |env_var| {
+            (env_var == "OPENAI_API_KEY").then(String::new)
+        });
+
+        assert!(key.is_none());
     }
 
     #[test]

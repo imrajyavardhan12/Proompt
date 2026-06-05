@@ -51,6 +51,7 @@ pub struct ProviderSetupStatus {
     pub provider: String,
     pub model: String,
     pub api_key_configured: bool,
+    pub api_key_status: String,
     pub api_key_error: Option<String>,
     pub env_var: String,
     pub cli_command: String,
@@ -517,17 +518,21 @@ pub fn get_provider_setup_status() -> Result<ProviderSetupStatus, String> {
         .to_string();
     let cli_command = format!("proompt config set {}.api_key YOUR_KEY", provider);
 
-    let (api_key_configured, api_key_error) = match config.mode {
-        Mode::Byok => match cfg::get_api_key(&provider) {
-            Ok(key) if !key.trim().is_empty() => (true, None),
-            Ok(_) => (
-                false,
-                Some(format!("Empty API key configured for '{}'", provider)),
+    let (api_key_configured, api_key_status, api_key_error) = match config.mode {
+        Mode::Byok if cfg::get_api_key_from_env(&provider).is_some() => {
+            (true, "env_configured".to_string(), None)
+        }
+        Mode::Byok => (
+            false,
+            "deferred".to_string(),
+            Some(
+                "Keychain lookup is deferred until Enhance, Quick Enhance, or Test to avoid macOS prompts on app launch."
+                    .to_string(),
             ),
-            Err(e) => (false, Some(e.to_string())),
-        },
+        ),
         Mode::Hosted => (
             false,
+            "hosted_unavailable".to_string(),
             Some("Hosted mode is not implemented yet. Switch to BYOK mode.".to_string()),
         ),
     };
@@ -540,6 +545,7 @@ pub fn get_provider_setup_status() -> Result<ProviderSetupStatus, String> {
         provider,
         model,
         api_key_configured,
+        api_key_status,
         api_key_error,
         env_var,
         cli_command,
