@@ -95,6 +95,8 @@ Release notes should clearly say:
 
 - Desktop DMG is macOS Apple Silicon only for now.
 - Desktop app is unsigned/not notarized.
+- If the release includes selected-text replacement, macOS requires Accessibility permission.
+- If the release includes selected-text replacement, Proompt writes a local diagnostics file at `~/Library/Application Support/proompt/selection-diagnostics.json` for troubleshooting capture/replacement issues. Note that it contains metadata/status/error codes, active app/window metadata, and character counts only — not selected text or prompt content — and can be deleted anytime.
 - If macOS says the app is damaged, run:
 
 ```bash

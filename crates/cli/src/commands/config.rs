@@ -63,10 +63,20 @@ pub fn show() -> Result<()> {
         .terminal_platform
         .map(|platform| platform.to_string())
         .unwrap_or_else(|| "default target".to_string());
+    let selected_text_status = if config.quick_enhance.selected_text_enabled {
+        Style::new().green().apply_to("enabled").to_string()
+    } else {
+        Style::new().dim().apply_to("disabled").to_string()
+    };
     eprintln!(
         "  {} {}",
         muted.apply_to("auto target:     "),
         auto_target_status
+    );
+    eprintln!(
+        "  {} {}",
+        muted.apply_to("selected text:   "),
+        selected_text_status
     );
     eprintln!(
         "  {} {}",
@@ -177,6 +187,11 @@ pub fn set(key: &str, value: &str) -> Result<()> {
         "byok.model" => config.byok.model = value.to_string(),
         "quick_enhance.auto_detect" | "quick_enhance.auto_detect_target" => {
             config.quick_enhance.auto_detect_target = value.parse().unwrap_or(true);
+        }
+        "quick_enhance.selected_text"
+        | "quick_enhance.selected_text_enabled"
+        | "quick_enhance.replace_selection" => {
+            config.quick_enhance.selected_text_enabled = value.parse().unwrap_or(true);
         }
         "quick_enhance.terminal_platform" | "quick_enhance.terminal_target" => {
             config.quick_enhance.terminal_platform = match value.trim() {

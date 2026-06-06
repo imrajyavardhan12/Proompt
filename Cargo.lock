@@ -3232,6 +3232,8 @@ name = "proompt-app"
 version = "0.2.2"
 dependencies = [
  "anyhow",
+ "core-foundation 0.10.1",
+ "core-graphics",
  "proompt-core",
  "serde",
  "serde_json",

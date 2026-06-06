@@ -23,6 +23,7 @@
   let defaultImagePlatform = $state("midjourney");
   let quickEnhanceHotkey = $state("CmdOrCtrl+Shift+E");
   let autoDetectTarget = $state(true);
+  let selectedTextEnabled = $state(true);
   let terminalPlatform = $state("");
   let saveHistoryEnabled = $state(true);
   let supermemoryEnabled = $state(false);
@@ -90,6 +91,7 @@
       defaultImagePlatform = config.default_image_platform?.toLowerCase() || "midjourney";
       quickEnhanceHotkey = config.hotkeys?.quick_enhance || "CmdOrCtrl+Shift+E";
       autoDetectTarget = config.quick_enhance?.auto_detect_target ?? true;
+      selectedTextEnabled = config.quick_enhance?.selected_text_enabled ?? true;
       terminalPlatform = config.quick_enhance?.terminal_platform?.toLowerCase() || "";
       saveHistoryEnabled = config.preferences?.save_history ?? true;
       supermemoryEnabled = config.supermemory?.enabled || false;
@@ -139,6 +141,7 @@
         defaultPlatform,
         defaultImagePlatform,
         autoDetectTarget,
+        selectedTextEnabled,
         terminalPlatform: terminalPlatform || null,
         supermemoryEnabled,
         saveHistoryEnabled,
@@ -395,6 +398,19 @@
       <label class="toggle">
         <div class="toggle-track" class:on={autoDetectTarget}>
           <input type="checkbox" bind:checked={autoDetectTarget} />
+          <div class="toggle-thumb"></div>
+        </div>
+      </label>
+    </div>
+
+    <div class="section-row" style="margin-top: 12px">
+      <div>
+        <div class="section-label" style="margin-bottom: 2px">Use selected text when available</div>
+        <p class="hint" style="margin: 0">Quick Enhance copies the current selection, enhances it, then replaces it when the original app is still focused. Falls back to clipboard.</p>
+      </div>
+      <label class="toggle">
+        <div class="toggle-track" class:on={selectedTextEnabled}>
+          <input type="checkbox" bind:checked={selectedTextEnabled} />
           <div class="toggle-thumb"></div>
         </div>
       </label>
