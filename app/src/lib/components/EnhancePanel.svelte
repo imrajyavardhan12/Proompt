@@ -9,6 +9,7 @@
     };
     quick_enhance?: {
       auto_detect_target?: boolean;
+      selected_text_enabled?: boolean;
     };
   }
 
@@ -50,6 +51,7 @@
   let defaultImagePlatform = $state("midjourney");
   let quickEnhanceHotkey = $state("CmdOrCtrl+Shift+E");
   let autoDetectTarget = $state(true);
+  let selectedTextEnabled = $state(true);
   let providerSetup = $state<ProviderSetupStatus | null>(null);
   let setupStatusLoading = $state(true);
   let appliedDraftId = $state<string | null>(null);
@@ -104,6 +106,9 @@
       ? `Auto-detects active app, falls back to ${quickEnhanceTargetLabel}`
       : `Uses ${quickEnhanceTargetLabel}`
   );
+  let quickEnhanceInputCopy = $derived(
+    selectedTextEnabled ? "Select or copy rough text" : "Copy rough text"
+  );
   let recommendedProviderCopy = $derived(
     providerSetup?.provider === "openrouter"
       ? "You're already using OpenRouter. Paste your OpenRouter key in Settings to unlock GPT, Claude, Gemini, and OSS models."
@@ -152,12 +157,14 @@
       defaultImagePlatform = config.default_image_platform?.toLowerCase() || "midjourney";
       quickEnhanceHotkey = config.hotkeys?.quick_enhance || "CmdOrCtrl+Shift+E";
       autoDetectTarget = config.quick_enhance?.auto_detect_target ?? true;
+      selectedTextEnabled = config.quick_enhance?.selected_text_enabled ?? true;
       if (!draft) platform = defaultTextPlatform;
     } catch {
       defaultTextPlatform = "claude";
       defaultImagePlatform = "midjourney";
       quickEnhanceHotkey = "CmdOrCtrl+Shift+E";
       autoDetectTarget = true;
+      selectedTextEnabled = true;
       if (!draft) platform = "claude";
     }
   }
@@ -269,7 +276,7 @@
     </div>
     <div class="quick-tip-copy">
       <strong>Quick enhance from anywhere</strong>
-      <span>{quickEnhanceRoutingCopy}. Copy rough text, press <kbd>{quickEnhanceHotkeyDisplay}</kbd>, then paste. Prefix with /cc, /cursor, or /codex to override.</span>
+      <span>{quickEnhanceRoutingCopy}. {quickEnhanceInputCopy}, press <kbd>{quickEnhanceHotkeyDisplay}</kbd>. Selected text is replaced when possible; otherwise the result is copied. Prefix with /cc, /cursor, or /codex to override.</span>
     </div>
   </div>
 

@@ -173,6 +173,7 @@ mod tests {
         assert_eq!(config.mode, super::super::Mode::Byok);
         assert_eq!(config.default_platform, crate::platform::Platform::Claude);
         assert!(config.quick_enhance.auto_detect_target);
+        assert!(config.quick_enhance.selected_text_enabled);
         assert_eq!(config.quick_enhance.terminal_platform, None);
         assert!(!config.supermemory.enabled);
     }
@@ -206,5 +207,22 @@ mod tests {
             deserialized.quick_enhance.auto_detect_target,
             config.quick_enhance.auto_detect_target
         );
+        assert_eq!(
+            deserialized.quick_enhance.selected_text_enabled,
+            config.quick_enhance.selected_text_enabled
+        );
+    }
+
+    #[test]
+    fn config_loads_legacy_quick_enhance_without_selected_text_field() {
+        let config: Config = toml::from_str(
+            r#"
+            [quick_enhance]
+            auto_detect_target = true
+            "#,
+        )
+        .unwrap();
+
+        assert!(config.quick_enhance.selected_text_enabled);
     }
 }

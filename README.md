@@ -58,7 +58,7 @@ For development with hot-reload: `bunx tauri dev`
 The fastest workflow is the global hotkey. Use the app once to set your **Quick Enhance fallback target** and optional active-app/terminal routing, then stay in your current tool:
 
 ```text
-copy rough task -> press Cmd/Ctrl+Shift+E -> paste enhanced prompt
+select or copy rough task -> press Cmd/Ctrl+Shift+E -> Proompt replaces the selection or copies the enhanced prompt
 ```
 
 For coding agents, prefix clipboard text to override the target without opening Proompt:
@@ -72,7 +72,9 @@ For coding agents, prefix clipboard text to override the target without opening 
 /claude explain this tradeoff      -> Claude
 ```
 
-Proompt strips the prefix, enhances for that target, copies the result, and notifies which target was used and why. When auto-detect is enabled, Quick Enhance can route from active apps such as Cursor, ChatGPT, Claude, supported browser window titles, or a configured terminal default. Settings includes a local clipboard route preview, and History records actual hotkey routing decisions.
+Proompt strips the prefix, enhances for that target, replaces the selected text when possible, otherwise copies the result, and notifies which target was used and why. When auto-detect is enabled, Quick Enhance can route from active apps such as Cursor, ChatGPT, Claude, supported browser window titles, or a configured terminal default. Settings includes a local clipboard route preview, and History records actual hotkey routing decisions.
+
+Selected-text capture/replacement on macOS requires Accessibility permission. If an unsigned development build appears enabled but stops capturing selections after rebuilds, reset permission with `tccutil reset Accessibility com.proompt.desktop`, relaunch the current `/Applications/Proompt.app`, and grant Accessibility again.
 
 ### CLI
 

@@ -255,6 +255,8 @@ fn default_open_templates() -> String {
 pub struct QuickEnhanceConfig {
     #[serde(default = "default_auto_detect_target")]
     pub auto_detect_target: bool,
+    #[serde(default = "default_selected_text_enabled")]
+    pub selected_text_enabled: bool,
     #[serde(default)]
     pub terminal_platform: Option<Platform>,
 }
@@ -263,12 +265,16 @@ impl Default for QuickEnhanceConfig {
     fn default() -> Self {
         Self {
             auto_detect_target: true,
+            selected_text_enabled: true,
             terminal_platform: None,
         }
     }
 }
 
 fn default_auto_detect_target() -> bool {
+    true
+}
+fn default_selected_text_enabled() -> bool {
     true
 }
 

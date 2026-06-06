@@ -1,5 +1,21 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fs,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
+#[cfg(target_os = "macos")]
+use core_foundation::{
+    base::{CFRelease, CFTypeRef, TCFType},
+    boolean::CFBoolean,
+    dictionary::{CFDictionary, CFDictionaryRef},
+    string::{CFString, CFStringRef},
+};
+#[cfg(target_os = "macos")]
+use core_graphics::{
+    event::{CGEvent, CGEventFlags, CGEventTapLocation},
+    event_source::{CGEventSource, CGEventSourceStateID},
+};
 #[cfg(target_os = "macos")]
 use std::process::Command;
 
@@ -25,10 +41,87 @@ const TEXT_PLATFORM_HELP: &str =
     "claude, claude-code, openai, gemini, cursor, codex, coding-agent, or generic";
 const IMAGE_PLATFORM_HELP: &str = "midjourney, dalle, sd, or generic";
 
+static QUICK_ENHANCE_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+struct QuickEnhanceInFlightGuard;
+
+impl QuickEnhanceInFlightGuard {
+    fn try_acquire() -> anyhow::Result<Self> {
+        QUICK_ENHANCE_IN_FLIGHT
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .map(|_| Self)
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "Quick Enhance is already running. Wait for the current enhancement to finish."
+                )
+            })
+    }
+}
+
+impl Drop for QuickEnhanceInFlightGuard {
+    fn drop(&mut self) {
+        QUICK_ENHANCE_IN_FLIGHT.store(false, Ordering::Release);
+    }
+}
+
 #[derive(Debug)]
 struct QuickEnhanceOutcome {
     enhanced_prompt: String,
     resolution: TargetResolution,
+    input_source: QuickEnhanceInputSource,
+    delivery: QuickEnhanceDelivery,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QuickEnhanceInputSource {
+    SelectedText,
+    Clipboard,
+}
+
+impl QuickEnhanceInputSource {
+    fn label(&self) -> &'static str {
+        match self {
+            QuickEnhanceInputSource::SelectedText => "selected text",
+            QuickEnhanceInputSource::Clipboard => "clipboard prompt",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QuickEnhanceDelivery {
+    ReplacedSelection,
+    CopiedToClipboard,
+}
+
+#[derive(Debug)]
+struct QuickEnhanceInput {
+    prompt: String,
+    source: QuickEnhanceInputSource,
+    original_clipboard: Option<String>,
+}
+
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SelectionCaptureDiagnostics {
+    timestamp_ms: u64,
+    selected_text_enabled: bool,
+    outcome: String,
+    steps: Vec<String>,
+}
+
+impl SelectionCaptureDiagnostics {
+    fn new(selected_text_enabled: bool) -> Self {
+        Self {
+            timestamp_ms: now_ms(),
+            selected_text_enabled,
+            outcome: "not_started".to_string(),
+            steps: Vec::new(),
+        }
+    }
+
+    fn step(&mut self, message: impl Into<String>) {
+        self.steps.push(message.into());
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -40,6 +133,7 @@ pub struct SaveSettingsInput {
     default_platform: String,
     default_image_platform: Option<String>,
     auto_detect_target: bool,
+    selected_text_enabled: bool,
     terminal_platform: Option<String>,
     supermemory_enabled: bool,
     save_history_enabled: bool,
@@ -79,7 +173,7 @@ pub fn register_quick_enhance_shortcut(app: &AppHandle) {
     let result = app
         .global_shortcut()
         .on_shortcut(hotkey.as_str(), |app, _shortcut, event| {
-            if event.state != ShortcutState::Pressed {
+            if event.state != ShortcutState::Released {
                 return;
             }
 
@@ -145,37 +239,52 @@ pub async fn enhance_prompt(
 
 #[tauri::command]
 pub async fn quick_enhance_clipboard(app: AppHandle) -> Result<String, String> {
-    quick_enhance_clipboard_inner(app)
+    quick_enhance_from_available_input(app, false)
         .await
         .map(|outcome| outcome.enhanced_prompt)
         .map_err(|e| friendly_quick_enhance_error(&e.to_string()))
 }
 
 async fn quick_enhance_clipboard_with_notifications(app: AppHandle) -> anyhow::Result<String> {
-    notify(&app, "Proompt", "Enhancing clipboard prompt...");
-    let outcome = quick_enhance_clipboard_inner(app.clone()).await?;
-    notify(
-        &app,
-        "Proompt",
-        &quick_enhance_success_message(&outcome.resolution),
-    );
+    // Let physical hotkey modifiers settle before sending synthetic Cmd+C/Cmd+V.
+    // Without this, Cmd+Shift+E can leak Shift into capture as Cmd+Shift+C.
+    tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+    let outcome = quick_enhance_from_available_input(app.clone(), true).await?;
+    notify(&app, "Proompt", &quick_enhance_success_message(&outcome));
     Ok(outcome.enhanced_prompt)
 }
 
-async fn quick_enhance_clipboard_inner(app: AppHandle) -> anyhow::Result<QuickEnhanceOutcome> {
-    let prompt = app.clipboard().read_text()?;
-    if prompt.trim().is_empty() {
-        anyhow::bail!("Clipboard is empty. Copy a rough prompt first.");
-    }
-
+async fn quick_enhance_from_available_input(
+    app: AppHandle,
+    notify_progress: bool,
+) -> anyhow::Result<QuickEnhanceOutcome> {
+    let _in_flight = QuickEnhanceInFlightGuard::try_acquire()?;
     let config = cfg::load_config()?;
     let environment = collect_environment_snapshot();
-    let resolved =
-        resolve_quick_enhance_input_with_environment(&config, &prompt, environment.as_ref())?;
+    let captured = capture_quick_enhance_input(&app, &config).await?;
+
+    if notify_progress {
+        let progress = if captured.source == QuickEnhanceInputSource::Clipboard
+            && config.quick_enhance.selected_text_enabled
+        {
+            "No selected text detected; enhancing clipboard prompt...".to_string()
+        } else {
+            format!("Enhancing {}...", captured.source.label())
+        };
+        notify(&app, "Proompt", &progress);
+    }
+
+    let resolved = resolve_quick_enhance_input_with_environment(
+        &config,
+        &captured.prompt,
+        environment.as_ref(),
+    )?;
+    let original_prompt = resolved.prompt.clone();
+    let resolution = resolved.resolution.clone();
     let result = enhance_with_loaded_config(
         ConfiguredEnhanceRequest {
-            prompt: resolved.prompt.clone(),
-            platform: Some(resolved.resolution.platform.to_string()),
+            prompt: resolved.prompt,
+            platform: Some(resolution.platform.to_string()),
             enhancement_type: Some(EnhanceType::Text),
             include_memory: false,
             style_hints: None,
@@ -186,27 +295,614 @@ async fn quick_enhance_clipboard_inner(app: AppHandle) -> anyhow::Result<QuickEn
     .await?;
 
     let enhanced_prompt = result.response.enhanced_prompt.clone();
-    app.clipboard().write_text(&enhanced_prompt)?;
+    let delivery =
+        deliver_quick_enhance_output(&app, &enhanced_prompt, &captured, environment.as_ref())
+            .await?;
     record_prompt_history_if_enabled(NewPromptHistoryRecord {
-        original_prompt: resolved.prompt,
+        original_prompt,
         enhanced_prompt: enhanced_prompt.clone(),
         enhancement_type: result.enhancement_type,
         platform: result.response.platform,
         provider: result.provider,
         model: result.model,
-        routing: Some(resolved.resolution.clone().into()),
+        routing: Some(resolution.clone().into()),
     });
     Ok(QuickEnhanceOutcome {
         enhanced_prompt,
-        resolution: resolved.resolution,
+        resolution,
+        input_source: captured.source,
+        delivery,
     })
 }
 
-fn quick_enhance_success_message(resolution: &TargetResolution) -> String {
+async fn capture_quick_enhance_input(
+    app: &AppHandle,
+    config: &cfg::Config,
+) -> anyhow::Result<QuickEnhanceInput> {
+    let original_clipboard = app.clipboard().read_text().ok();
+    let mut diagnostics =
+        SelectionCaptureDiagnostics::new(config.quick_enhance.selected_text_enabled);
+    if let Some((active_app, window_title)) = collect_active_app() {
+        diagnostics.step(format!(
+            "active app: {} ({})",
+            active_app.name,
+            active_app
+                .bundle_id
+                .unwrap_or_else(|| "no bundle id".to_string())
+        ));
+        diagnostics.step(format!(
+            "active window: {}",
+            window_title.unwrap_or_else(|| "unavailable".to_string())
+        ));
+    } else {
+        diagnostics.step("active app: unavailable");
+    }
+    diagnostics.step(format!(
+        "original clipboard: {}",
+        original_clipboard
+            .as_ref()
+            .map(|text| format!("{} chars", text.chars().count()))
+            .unwrap_or_else(|| "unavailable".to_string())
+    ));
+
+    if config.quick_enhance.selected_text_enabled {
+        if let Some(selected_text) = capture_selected_text_via_accessibility(&mut diagnostics) {
+            diagnostics.outcome = format!(
+                "selected_text_via_accessibility:{} chars",
+                selected_text.chars().count()
+            );
+            write_selection_capture_diagnostics(&diagnostics);
+            return Ok(QuickEnhanceInput {
+                prompt: selected_text,
+                source: QuickEnhanceInputSource::SelectedText,
+                original_clipboard,
+            });
+        }
+
+        if original_clipboard.is_some() {
+            if let Some(selected_text) = capture_selected_text_via_clipboard(
+                app,
+                original_clipboard.as_ref(),
+                &mut diagnostics,
+            )
+            .await
+            {
+                diagnostics.outcome = format!(
+                    "selected_text_via_clipboard:{} chars",
+                    selected_text.chars().count()
+                );
+                write_selection_capture_diagnostics(&diagnostics);
+                return Ok(QuickEnhanceInput {
+                    prompt: selected_text,
+                    source: QuickEnhanceInputSource::SelectedText,
+                    original_clipboard,
+                });
+            }
+        } else {
+            diagnostics.step(
+                "clipboard fallback skipped: original text clipboard unavailable; preserving non-text clipboard",
+            );
+        }
+    } else {
+        diagnostics.step("selected text capture disabled by config");
+    }
+
+    let prompt = original_clipboard.clone().unwrap_or_default();
+    if prompt.trim().is_empty() {
+        diagnostics.outcome = "empty_input".to_string();
+        write_selection_capture_diagnostics(&diagnostics);
+        anyhow::bail!(
+            "No selected text found and clipboard text is empty or unavailable. Select rough text, grant Accessibility permission if prompted, or copy the prompt first."
+        );
+    }
+
+    diagnostics.outcome = format!("clipboard_fallback:{} chars", prompt.chars().count());
+    write_selection_capture_diagnostics(&diagnostics);
+
+    Ok(QuickEnhanceInput {
+        prompt,
+        source: QuickEnhanceInputSource::Clipboard,
+        original_clipboard,
+    })
+}
+
+async fn deliver_quick_enhance_output(
+    app: &AppHandle,
+    enhanced_prompt: &str,
+    captured: &QuickEnhanceInput,
+    initial_environment: Option<&EnvironmentSnapshot>,
+) -> anyhow::Result<QuickEnhanceDelivery> {
+    if captured.source == QuickEnhanceInputSource::SelectedText
+        && active_app_matches_current(initial_environment)
+        && replace_selected_text(app, enhanced_prompt, captured.original_clipboard.as_ref()).await
+    {
+        return Ok(QuickEnhanceDelivery::ReplacedSelection);
+    }
+
+    app.clipboard().write_text(enhanced_prompt)?;
+    Ok(QuickEnhanceDelivery::CopiedToClipboard)
+}
+
+fn quick_enhance_success_message(outcome: &QuickEnhanceOutcome) -> String {
+    let action = match (outcome.input_source, outcome.delivery) {
+        (QuickEnhanceInputSource::SelectedText, QuickEnhanceDelivery::ReplacedSelection) => {
+            "Replaced selection"
+        }
+        (QuickEnhanceInputSource::SelectedText, QuickEnhanceDelivery::CopiedToClipboard) => {
+            "Copied enhanced selection"
+        }
+        (QuickEnhanceInputSource::Clipboard, QuickEnhanceDelivery::CopiedToClipboard) => {
+            "Copied enhanced prompt"
+        }
+        (QuickEnhanceInputSource::Clipboard, QuickEnhanceDelivery::ReplacedSelection) => {
+            "Enhanced prompt"
+        }
+    };
+
     format!(
-        "Enhanced for {} — {}.",
-        resolution.platform.label(),
-        resolution.reason
+        "{} for {} — {}.",
+        action,
+        outcome.resolution.platform.label(),
+        outcome.resolution.reason
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn capture_selected_text_via_accessibility(
+    diagnostics: &mut SelectionCaptureDiagnostics,
+) -> Option<String> {
+    let trusted = ax_is_process_trusted();
+    diagnostics.step(format!("AX trusted: {}", trusted));
+    if !trusted {
+        let prompted = request_accessibility_permission_prompt();
+        diagnostics.step(format!("AX permission prompt requested: {}", prompted));
+        return None;
+    }
+    let focused = match focused_ax_element(diagnostics) {
+        Ok(focused) => focused,
+        Err(e) => {
+            diagnostics.step(format!("AX focused element failed: {}", e));
+            return None;
+        }
+    };
+
+    match copy_ax_string_attribute(focused.as_ref(), AX_ROLE) {
+        Ok(Some(role)) => diagnostics.step(format!("AX focused role: {}", role)),
+        Ok(None) => diagnostics.step("AX focused role unavailable"),
+        Err(e) => diagnostics.step(format!("AX focused role failed: {}", e)),
+    }
+
+    match copy_ax_string_attribute(focused.as_ref(), AX_SELECTED_TEXT) {
+        Ok(Some(selected_text)) if !selected_text.trim().is_empty() => {
+            diagnostics.step(format!(
+                "AXSelectedText captured: {} chars",
+                selected_text.chars().count()
+            ));
+            Some(selected_text)
+        }
+        Ok(Some(_)) => {
+            diagnostics.step("AXSelectedText returned empty text");
+            None
+        }
+        Ok(None) => {
+            diagnostics.step("AXSelectedText unavailable");
+            None
+        }
+        Err(e) => {
+            diagnostics.step(format!("AXSelectedText failed: {}", e));
+            None
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn capture_selected_text_via_accessibility(
+    diagnostics: &mut SelectionCaptureDiagnostics,
+) -> Option<String> {
+    diagnostics.step("AX capture unavailable on this OS");
+    None
+}
+
+#[cfg(target_os = "macos")]
+async fn capture_selected_text_via_clipboard(
+    app: &AppHandle,
+    original_clipboard: Option<&String>,
+    diagnostics: &mut SelectionCaptureDiagnostics,
+) -> Option<String> {
+    diagnostics.step("clipboard fallback: starting sentinel copy probe");
+    let sentinel = selection_clipboard_sentinel();
+    if let Err(e) = app.clipboard().write_text(&sentinel) {
+        diagnostics.step(format!("clipboard fallback: sentinel write failed: {}", e));
+        return None;
+    }
+
+    tokio::time::sleep(std::time::Duration::from_millis(40)).await;
+
+    if let Err(e) = send_system_edit_command(SystemEditCommand::Copy) {
+        diagnostics.step(format!("clipboard fallback: copy command failed: {}", e));
+        restore_clipboard_text(app, original_clipboard);
+        return None;
+    }
+
+    for _ in 0..20 {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let current = match app.clipboard().read_text() {
+            Ok(current) => current,
+            Err(e) => {
+                diagnostics.step(format!("clipboard fallback: read failed: {}", e));
+                restore_clipboard_text(app, original_clipboard);
+                return None;
+            }
+        };
+        if current != sentinel {
+            diagnostics.step(format!(
+                "clipboard fallback: clipboard changed after copy: {} chars",
+                current.chars().count()
+            ));
+            restore_clipboard_text(app, original_clipboard);
+            return (!current.trim().is_empty()).then_some(current);
+        }
+    }
+
+    diagnostics.step("clipboard fallback: clipboard did not change after copy command");
+    restore_clipboard_text(app, original_clipboard);
+    None
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn capture_selected_text_via_clipboard(
+    _app: &AppHandle,
+    _original_clipboard: Option<&String>,
+    diagnostics: &mut SelectionCaptureDiagnostics,
+) -> Option<String> {
+    diagnostics.step("clipboard fallback capture unavailable on this OS");
+    None
+}
+
+#[cfg(target_os = "macos")]
+async fn replace_selected_text(
+    app: &AppHandle,
+    enhanced_prompt: &str,
+    original_clipboard: Option<&String>,
+) -> bool {
+    if app.clipboard().write_text(enhanced_prompt).is_err() {
+        return false;
+    }
+
+    if send_system_edit_command(SystemEditCommand::Paste).is_err() {
+        return false;
+    }
+
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    restore_clipboard_text(app, original_clipboard);
+    true
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn replace_selected_text(
+    _app: &AppHandle,
+    _enhanced_prompt: &str,
+    _original_clipboard: Option<&String>,
+) -> bool {
+    false
+}
+
+#[cfg(target_os = "macos")]
+const AX_FOCUSED_APPLICATION: &str = "AXFocusedApplication";
+#[cfg(target_os = "macos")]
+const AX_FOCUSED_UI_ELEMENT: &str = "AXFocusedUIElement";
+#[cfg(target_os = "macos")]
+const AX_ROLE: &str = "AXRole";
+#[cfg(target_os = "macos")]
+const AX_SELECTED_TEXT: &str = "AXSelectedText";
+#[cfg(target_os = "macos")]
+const AX_ERROR_SUCCESS: i32 = 0;
+
+#[cfg(target_os = "macos")]
+type AXUIElementRef = *const std::ffi::c_void;
+#[cfg(target_os = "macos")]
+type AXError = i32;
+
+#[cfg(target_os = "macos")]
+struct AxElement(AXUIElementRef);
+
+#[cfg(target_os = "macos")]
+impl AxElement {
+    fn as_ref(&self) -> AXUIElementRef {
+        self.0
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for AxElement {
+    fn drop(&mut self) {
+        unsafe { CFRelease(self.0.cast()) }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn focused_ax_element(diagnostics: &mut SelectionCaptureDiagnostics) -> anyhow::Result<AxElement> {
+    let system = unsafe { AXUIElementCreateSystemWide() };
+    if system.is_null() {
+        anyhow::bail!("could not create system-wide accessibility element");
+    }
+    let system = AxElement(system);
+
+    match copy_ax_element_attribute(system.as_ref(), AX_FOCUSED_APPLICATION) {
+        Ok(focused_app) => {
+            diagnostics.step("AX focused application captured");
+            match copy_ax_element_attribute(focused_app.as_ref(), AX_FOCUSED_UI_ELEMENT) {
+                Ok(focused_element) => {
+                    diagnostics.step("AX focused UI element captured from focused application");
+                    return Ok(focused_element);
+                }
+                Err(e) => diagnostics.step(format!(
+                    "AX focused UI element from focused app failed: {}",
+                    e
+                )),
+            }
+        }
+        Err(e) => diagnostics.step(format!("AX focused application failed: {}", e)),
+    }
+
+    let focused = copy_ax_element_attribute(system.as_ref(), AX_FOCUSED_UI_ELEMENT)?;
+    diagnostics.step("AX focused UI element captured from system-wide element");
+    Ok(focused)
+}
+
+#[cfg(target_os = "macos")]
+fn copy_ax_element_attribute(
+    element: AXUIElementRef,
+    attribute: &str,
+) -> anyhow::Result<AxElement> {
+    let attribute_name = attribute;
+    let attribute = CFString::new(attribute_name);
+    let mut value: CFTypeRef = std::ptr::null();
+    let error = unsafe {
+        AXUIElementCopyAttributeValue(element, attribute.as_concrete_TypeRef(), &mut value)
+    };
+    if error != AX_ERROR_SUCCESS || value.is_null() {
+        anyhow::bail!(
+            "AX attribute '{}' copy failed with error {}",
+            attribute_name,
+            error
+        );
+    }
+    Ok(AxElement(value.cast()))
+}
+
+#[cfg(target_os = "macos")]
+fn copy_ax_string_attribute(
+    element: AXUIElementRef,
+    attribute: &str,
+) -> anyhow::Result<Option<String>> {
+    let attribute_name = attribute;
+    let attribute = CFString::new(attribute_name);
+    let mut value: CFTypeRef = std::ptr::null();
+    let error = unsafe {
+        AXUIElementCopyAttributeValue(element, attribute.as_concrete_TypeRef(), &mut value)
+    };
+    if error != AX_ERROR_SUCCESS || value.is_null() {
+        anyhow::bail!(
+            "AX attribute '{}' copy failed with error {}",
+            attribute_name,
+            error
+        );
+    }
+
+    let value = unsafe { CFString::wrap_under_create_rule(value as CFStringRef) };
+    Ok(Some(value.to_string()))
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "ApplicationServices", kind = "framework")]
+unsafe extern "C" {
+    static kAXTrustedCheckOptionPrompt: CFStringRef;
+
+    fn AXIsProcessTrusted() -> bool;
+    fn AXIsProcessTrustedWithOptions(options: CFDictionaryRef) -> bool;
+    fn AXUIElementCreateSystemWide() -> AXUIElementRef;
+    fn AXUIElementCopyAttributeValue(
+        element: AXUIElementRef,
+        attribute: CFStringRef,
+        value: *mut CFTypeRef,
+    ) -> AXError;
+}
+
+#[cfg(target_os = "macos")]
+fn ax_is_process_trusted() -> bool {
+    unsafe { AXIsProcessTrusted() }
+}
+
+#[cfg(target_os = "macos")]
+fn request_accessibility_permission_prompt() -> bool {
+    let prompt_key = unsafe { CFString::wrap_under_get_rule(kAXTrustedCheckOptionPrompt) };
+    let prompt_value = CFBoolean::true_value();
+    let options = CFDictionary::from_CFType_pairs(&[(prompt_key, prompt_value)]);
+    unsafe { AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef()) }
+}
+
+fn write_selection_capture_diagnostics(diagnostics: &SelectionCaptureDiagnostics) {
+    let Ok(dir) = cfg::config_dir() else {
+        return;
+    };
+    let _ = fs::create_dir_all(&dir);
+    let path = dir.join("selection-diagnostics.json");
+    if let Ok(content) = serde_json::to_string_pretty(diagnostics)
+        && fs::write(&path, content).is_ok()
+    {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+        }
+    }
+}
+
+fn now_ms() -> u64 {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    millis.min(u128::from(u64::MAX)) as u64
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, Copy)]
+enum SystemEditCommand {
+    Copy,
+    Paste,
+}
+
+#[cfg(target_os = "macos")]
+impl SystemEditCommand {
+    fn menu_item(&self) -> &'static str {
+        match self {
+            SystemEditCommand::Copy => "Copy",
+            SystemEditCommand::Paste => "Paste",
+        }
+    }
+
+    fn key_code(&self) -> u8 {
+        match self {
+            // ANSI C / V key codes. Prefer menu items first because physical
+            // hotkey modifiers can leak into synthetic keystrokes.
+            SystemEditCommand::Copy => 8,
+            SystemEditCommand::Paste => 9,
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn send_system_edit_command(command: SystemEditCommand) -> anyhow::Result<()> {
+    send_quartz_command_key_code(command).or_else(|quartz_error| {
+        send_system_edit_menu_item(command).or_else(|menu_error| {
+            send_osascript_command_key_code(command).map_err(|key_error| {
+                anyhow::anyhow!(
+                    "CoreGraphics event failed: {}; Edit menu failed: {}; osascript key fallback failed: {}",
+                    quartz_error,
+                    menu_error,
+                    key_error
+                )
+            })
+        })
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn send_quartz_command_key_code(command: SystemEditCommand) -> anyhow::Result<()> {
+    let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+        .map_err(|_| anyhow::anyhow!("could not create CGEventSource"))?;
+    let key_down = CGEvent::new_keyboard_event(source.clone(), command.key_code().into(), true)
+        .map_err(|_| anyhow::anyhow!("could not create key-down event"))?;
+    key_down.set_flags(CGEventFlags::CGEventFlagCommand);
+    key_down.post(CGEventTapLocation::HID);
+
+    std::thread::sleep(std::time::Duration::from_millis(20));
+
+    let key_up = CGEvent::new_keyboard_event(source, command.key_code().into(), false)
+        .map_err(|_| anyhow::anyhow!("could not create key-up event"))?;
+    key_up.set_flags(CGEventFlags::CGEventFlagCommand);
+    key_up.post(CGEventTapLocation::HID);
+
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn send_system_edit_menu_item(command: SystemEditCommand) -> anyhow::Result<()> {
+    let script = format!(
+        r#"
+        tell application "System Events"
+            set frontApp to first application process whose frontmost is true
+            tell frontApp
+                click menu item "{}" of menu "Edit" of menu bar 1
+            end tell
+        end tell
+        "#,
+        command.menu_item()
+    );
+    run_osascript(&script)
+        .map_err(|e| anyhow::anyhow!("{} menu item failed: {}", command.menu_item(), e))
+}
+
+#[cfg(target_os = "macos")]
+fn send_osascript_command_key_code(command: SystemEditCommand) -> anyhow::Result<()> {
+    let script = format!(
+        r#"tell application "System Events" to key code {} using command down"#,
+        command.key_code()
+    );
+    run_osascript(&script)
+        .map_err(|e| anyhow::anyhow!("key code {} failed: {}", command.key_code(), e))
+}
+
+#[cfg(target_os = "macos")]
+fn run_osascript(script: &str) -> anyhow::Result<()> {
+    let output = Command::new("osascript").arg("-e").arg(script).output()?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    anyhow::bail!("{}{}", stderr, stdout);
+}
+
+#[cfg(target_os = "macos")]
+fn restore_clipboard_text(app: &AppHandle, original_clipboard: Option<&String>) {
+    if let Some(original_clipboard) = original_clipboard {
+        let _ = app.clipboard().write_text(original_clipboard);
+    }
+}
+
+fn active_app_matches_current(initial_environment: Option<&EnvironmentSnapshot>) -> bool {
+    let Some(initial_environment) = initial_environment else {
+        return false;
+    };
+    let Some(initial_app) = initial_environment.active_app.as_ref() else {
+        return false;
+    };
+    let Some((current_app, current_window_title)) = collect_active_app() else {
+        return false;
+    };
+
+    same_active_app(initial_app, &current_app)
+        && same_window_title_when_initial_available(
+            initial_environment.window_title.as_deref(),
+            current_window_title.as_deref(),
+        )
+}
+
+fn same_active_app(left: &ActiveApp, right: &ActiveApp) -> bool {
+    left.name == right.name && left.bundle_id == right.bundle_id
+}
+
+fn same_window_title_when_initial_available(
+    initial_window_title: Option<&str>,
+    current_window_title: Option<&str>,
+) -> bool {
+    let Some(initial_window_title) = initial_window_title
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+    else {
+        return true;
+    };
+
+    current_window_title
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .is_some_and(|current_window_title| current_window_title == initial_window_title)
+}
+
+#[cfg(target_os = "macos")]
+fn selection_clipboard_sentinel() -> String {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    format!(
+        "__PROOMPT_SELECTION_CAPTURE_{}_{}__",
+        std::process::id(),
+        millis
     )
 }
 
@@ -435,7 +1131,9 @@ fn notify(app: &AppHandle, title: &str, body: &str) {
 
 fn friendly_quick_enhance_error(message: &str) -> String {
     let lower = message.to_lowercase();
-    if lower.contains("api key not configured")
+    if lower.contains("quick enhance is already running") {
+        "Already enhancing. Wait for the current Quick Enhance to finish.".to_string()
+    } else if lower.contains("api key not configured")
         || lower.contains("failed to get api key")
         || lower.contains("api key not found")
     {
@@ -592,6 +1290,7 @@ pub fn save_settings(input: SaveSettingsInput) -> Result<(), String> {
     }
 
     config.quick_enhance.auto_detect_target = input.auto_detect_target;
+    config.quick_enhance.selected_text_enabled = input.selected_text_enabled;
     config.quick_enhance.terminal_platform = match input.terminal_platform.as_deref().map(str::trim)
     {
         Some("") | None => None,
@@ -712,4 +1411,33 @@ fn model_validation_message(provider: &str) -> String {
 #[tauri::command]
 pub fn copy_to_clipboard(app: AppHandle, text: String) -> Result<(), String> {
     app.clipboard().write_text(text).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn same_window_title_allows_match_when_initial_title_unavailable() {
+        assert!(same_window_title_when_initial_available(
+            None,
+            Some("Other window")
+        ));
+    }
+
+    #[test]
+    fn same_window_title_requires_current_title_to_match_when_initial_available() {
+        assert!(same_window_title_when_initial_available(
+            Some("Editor — project"),
+            Some("Editor — project")
+        ));
+        assert!(!same_window_title_when_initial_available(
+            Some("Editor — project"),
+            Some("Different document")
+        ));
+        assert!(!same_window_title_when_initial_available(
+            Some("Editor — project"),
+            None
+        ));
+    }
 }
