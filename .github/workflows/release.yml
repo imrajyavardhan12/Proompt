@@ -165,17 +165,22 @@ jobs:
           if [[ "$has_cert" == false && "$has_api_notary" == false && "$has_password_notary" == false ]]; then
             echo "PROOMPT_MACOS_SIGNING_MODE=unsigned" >> "$GITHUB_ENV"
             echo "No Apple signing secrets configured; building unsigned macOS DMG."
+            echo "This is expected while Developer ID signing is deferred. No Apple Developer account is required for unsigned releases."
             exit 0
           fi
 
           if [[ -z "${APPLE_CERTIFICATE:-}" || -z "${APPLE_CERTIFICATE_PASSWORD:-}" ]]; then
+            echo "Partial Apple signing configuration detected." >&2
             echo "APPLE_CERTIFICATE and APPLE_CERTIFICATE_PASSWORD are required for signed macOS releases." >&2
+            echo "If signing is intentionally deferred, remove all APPLE_* signing/notarization secrets so the unsigned fallback path is used." >&2
             exit 1
           fi
 
           if [[ "$has_api_notary" == true ]]; then
             if [[ -z "${APPLE_API_KEY:-}" || -z "${APPLE_API_ISSUER:-}" || -z "${APPLE_API_PRIVATE_KEY:-}" ]]; then
+              echo "Partial API-key notarization configuration detected." >&2
               echo "APPLE_API_KEY, APPLE_API_ISSUER, and APPLE_API_PRIVATE_KEY must all be set for API-key notarization." >&2
+              echo "If signing is intentionally deferred, remove all APPLE_* signing/notarization secrets so the unsigned fallback path is used." >&2
               exit 1
             fi
 
@@ -187,7 +192,9 @@ jobs:
 
           if [[ "$has_password_notary" == true ]]; then
             if [[ -z "${APPLE_ID:-}" || -z "${APPLE_PASSWORD:-}" || -z "${APPLE_TEAM_ID:-}" ]]; then
+              echo "Partial Apple ID notarization configuration detected." >&2
               echo "APPLE_ID, APPLE_PASSWORD, and APPLE_TEAM_ID must all be set for Apple ID notarization." >&2
+              echo "If signing is intentionally deferred, remove all APPLE_* signing/notarization secrets so the unsigned fallback path is used." >&2
               exit 1
             fi
           fi
@@ -195,6 +202,7 @@ jobs:
           if [[ "$has_api_notary" == false && "$has_password_notary" == false ]]; then
             echo "Notarization credentials are required for signed macOS releases." >&2
             echo "Set either APPLE_API_KEY/APPLE_API_ISSUER/APPLE_API_PRIVATE_KEY or APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID." >&2
+            echo "If signing is intentionally deferred, remove all APPLE_* signing/notarization secrets so the unsigned fallback path is used." >&2
             exit 1
           fi
 
@@ -234,7 +242,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${PROOMPT_MACOS_SIGNING_MODE:-}" == "unsigned" ]]; then
-            echo "::warning::macOS signing secrets are not configured. Published DMG will remain unsigned/not notarized."
+            echo "::warning::macOS signing secrets are not configured. Published DMG will remain unsigned/not notarized. This is expected while Developer ID signing is deferred."
           fi
 
       - name: Upload desktop release asset

@@ -49,6 +49,7 @@ Smoke-check:
 
 macOS signing note:
 
+- Developer ID signing/notarization is optional and currently deferred. No Apple Developer account is required for unsigned releases.
 - The release workflow signs/notarizes the DMG only when Apple signing secrets are configured. See `docs/macos-signing.md`.
 - If signing secrets are absent, the workflow publishes an unsigned fallback DMG and emits a warning.
 - Unsigned builds may trigger Gatekeeper's "damaged" warning. If testing an official unsigned GitHub Release artifact, remove quarantine once:
@@ -96,7 +97,7 @@ The release workflow will:
    - macOS CLI archive
    - Windows CLI archive
    - macOS Apple Silicon desktop `.dmg`
-4. Sign/notarize the macOS app when Apple secrets are configured; otherwise publish an unsigned fallback with a warning.
+4. Sign/notarize the macOS app when Apple secrets are configured; otherwise publish an unsigned fallback with a warning. The unsigned path is expected while Developer ID signing is deferred.
 5. Publish the draft only after all build/upload jobs pass.
 
 ## 6. Verify GitHub Release
