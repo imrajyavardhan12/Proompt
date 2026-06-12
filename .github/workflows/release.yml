@@ -266,5 +266,6 @@ jobs:
       - name: Publish draft release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         shell: bash
         run: gh release edit "${GITHUB_REF_NAME}" --draft=false --latest
