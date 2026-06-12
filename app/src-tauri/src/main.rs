@@ -16,6 +16,8 @@ fn main() {
             commands::enhance_prompt,
             commands::quick_enhance_clipboard,
             commands::inspect_quick_enhance_route,
+            commands::get_accessibility_status,
+            commands::open_accessibility_settings,
             commands::list_history,
             commands::set_history_favorite,
             commands::delete_history_record,

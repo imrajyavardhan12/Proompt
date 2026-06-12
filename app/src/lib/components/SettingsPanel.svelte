@@ -15,6 +15,19 @@
     error?: string | null;
   }
 
+  interface AccessibilityStatus {
+    platformSupported: boolean;
+    accessibilityTrusted?: boolean | null;
+    selectedTextEnabled: boolean;
+    diagnosticsPath: string;
+    lastCapture?: {
+      timestampMs: number;
+      selectedTextEnabled: boolean;
+      outcome: string;
+      steps: string[];
+    } | null;
+  }
+
   let mode = $state("byok");
   let provider = $state("openai");
   let model = $state("gpt-4o");
@@ -31,6 +44,9 @@
   let status = $state<{ type: "success" | "error"; text: string } | null>(null);
   let routeInspection = $state<QuickEnhanceRouteInspection | null>(null);
   let routeInspecting = $state(false);
+  let axStatus = $state<AccessibilityStatus | null>(null);
+  let axLoading = $state(false);
+  let axStepsExpanded = $state(false);
   let testingConnection = $state(false);
   let saving = $state(false);
 
@@ -103,7 +119,52 @@
     }
   }
 
-  $effect(() => { loadConfig(); });
+  $effect(() => { loadConfig(); loadAccessibilityStatus(); });
+
+  async function loadAccessibilityStatus() {
+    axLoading = true;
+    try {
+      axStatus = await invoke<AccessibilityStatus>("get_accessibility_status");
+    } catch {
+      axStatus = null;
+    } finally {
+      axLoading = false;
+    }
+  }
+
+  async function openAccessibilitySettings() {
+    try {
+      await invoke("open_accessibility_settings");
+    } catch (e: any) {
+      showStatus("error", `${e}`);
+    }
+  }
+
+  function captureOutcomeLabel(outcome: string) {
+    const [kind, detail] = outcome.split(":", 2);
+    const chars = detail?.trim() ? ` (${detail.trim()})` : "";
+    const labels: Record<string, string> = {
+      selected_text_via_accessibility: "Selected text captured via Accessibility",
+      selected_text_via_clipboard: "Selected text captured via clipboard probe",
+      clipboard_fallback: "Fell back to clipboard prompt",
+      empty_input: "No selected text or clipboard text found",
+      not_started: "No capture recorded yet",
+    };
+    return (labels[kind] ?? kind) + chars;
+  }
+
+  function captureOutcomeIsFallback(outcome: string) {
+    return outcome.startsWith("clipboard_fallback") || outcome.startsWith("empty_input");
+  }
+
+  function relativeTime(timestampMs: number) {
+    if (!timestampMs) return "unknown time";
+    const seconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
+    if (seconds < 60) return "just now";
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+    return new Date(timestampMs).toLocaleString();
+  }
 
   function selectProvider(providerId: string) {
     provider = providerId;
@@ -416,6 +477,74 @@
       </label>
     </div>
 
+    <div class="diagnostic-card">
+      <div class="diagnostic-top">
+        <div>
+          <span class="diagnostic-title">Selected-text diagnostics</span>
+          <p class="hint" style="margin: 2px 0 0">Accessibility permission state and the last capture attempt.</p>
+        </div>
+        <button class="btn-secondary" onclick={loadAccessibilityStatus} disabled={axLoading}>
+          {axLoading ? "Checking..." : "Refresh"}
+        </button>
+      </div>
+
+      {#if axStatus}
+        {#if !axStatus.platformSupported}
+          <p class="hint">Selected-text capture is only available on macOS.</p>
+        {:else}
+          <div class="ax-status-row">
+            <span
+              class="status-dot"
+              class:ok={axStatus.accessibilityTrusted === true}
+              class:bad={axStatus.accessibilityTrusted === false}
+            ></span>
+            <span class="ax-status-text">
+              {axStatus.accessibilityTrusted
+                ? "Accessibility permission granted"
+                : "Accessibility permission not granted"}
+            </span>
+            {#if axStatus.accessibilityTrusted === false}
+              <button class="btn-secondary" onclick={openAccessibilitySettings}>Open System Settings</button>
+            {/if}
+          </div>
+
+          {#if axStatus.accessibilityTrusted === false}
+            <p class="hint">
+              Enable Proompt under Privacy &amp; Security → Accessibility. If it already looks enabled
+              but capture still fails (common after replacing an unsigned build), reset and re-grant:
+            </p>
+            <code>tccutil reset Accessibility com.proompt.desktop</code>
+          {/if}
+
+          {#if axStatus.lastCapture && axStatus.lastCapture.outcome !== "not_started"}
+            <div class="diagnostic-row">
+              <span>Last capture · {relativeTime(axStatus.lastCapture.timestampMs)}</span>
+              <strong
+                class="ax-outcome"
+                class:fallback={captureOutcomeIsFallback(axStatus.lastCapture.outcome)}
+              >{captureOutcomeLabel(axStatus.lastCapture.outcome)}</strong>
+            </div>
+            {#if axStatus.lastCapture.steps.length > 0}
+              <button class="ax-steps-toggle" onclick={() => (axStepsExpanded = !axStepsExpanded)}>
+                {axStepsExpanded ? "Hide capture steps" : `Show capture steps (${axStatus.lastCapture.steps.length})`}
+              </button>
+              {#if axStepsExpanded}
+                <ol class="ax-steps">
+                  {#each axStatus.lastCapture.steps as step}
+                    <li>{step}</li>
+                  {/each}
+                </ol>
+              {/if}
+            {/if}
+          {:else}
+            <p class="hint">No capture recorded yet. Trigger Quick Enhance once to populate this.</p>
+          {/if}
+        {/if}
+      {:else if !axLoading}
+        <p class="hint">Diagnostics unavailable.</p>
+      {/if}
+    </div>
+
     <div class="section-label" style="margin-top: 14px">Terminal default target</div>
     <p class="hint" style="margin: 0 0 8px">Used for Terminal, Ghostty, iTerm, Warp, and similar apps when no /prefix is present.</p>
     <div class="select-wrap">
@@ -579,13 +708,13 @@
   h1 {
     font-size: 22px;
     font-weight: 650;
-    color: #fafafa;
+    color: #f5f5f5;
     letter-spacing: -0.5px;
   }
 
   .subtitle {
     font-size: 13px;
-    color: #52525b;
+    color: #787878;
     font-weight: 450;
   }
 
@@ -598,7 +727,7 @@
   .section-label {
     font-size: 12px;
     font-weight: 600;
-    color: #a1a1aa;
+    color: #bebebe;
   }
 
   .section-row {
@@ -622,8 +751,8 @@
     flex-direction: column;
     gap: 3px;
     padding: 12px;
-    background: #0f0f12;
-    border: 1px solid #1a1a1e;
+    background: #171717;
+    border: 1px solid #2a2a2a;
     border-radius: 10px;
     cursor: pointer;
     text-align: left;
@@ -632,32 +761,32 @@
 
   .mode-card:hover,
   .provider-card:hover {
-    border-color: #27272a;
-    background: #18181b;
+    border-color: #3a3a3a;
+    background: #202020;
   }
 
   .mode-card.active,
   .provider-card.active {
-    border-color: rgba(16, 185, 129, 0.4);
-    background: rgba(16, 185, 129, 0.05);
+    border-color: rgba(214, 211, 209, 0.40);
+    background: rgba(214, 211, 209, 0.05);
   }
 
   .mode-name,
   .provider-name {
     font-size: 13px;
     font-weight: 600;
-    color: #e4e4e7;
+    color: #eeeeee;
   }
 
   .mode-card.active .mode-name,
   .provider-card.active .provider-name {
-    color: #34d399;
+    color: #f5f5f4;
   }
 
   .mode-desc,
   .provider-desc {
     font-size: 11px;
-    color: #52525b;
+    color: #787878;
   }
 
   /* ── Hotkeys ──────────────────────── */
@@ -668,25 +797,25 @@
     justify-content: space-between;
     gap: 12px;
     padding: 12px;
-    background: #0f0f12;
-    border: 1px solid #1a1a1e;
+    background: #171717;
+    border: 1px solid #2a2a2a;
     border-radius: 10px;
   }
 
   .hotkey-name {
     font-size: 13px;
     font-weight: 600;
-    color: #e4e4e7;
+    color: #eeeeee;
   }
 
   kbd {
     font-family: inherit;
     font-size: 11px;
     padding: 4px 8px;
-    background: #18181b;
-    color: #a1a1aa;
+    background: #202020;
+    color: #bebebe;
     border-radius: 6px;
-    border: 1px solid #27272a;
+    border: 1px solid #3a3a3a;
     font-weight: 600;
     white-space: nowrap;
   }
@@ -697,9 +826,9 @@
   .model-input,
   .key-row input {
     padding: 8px 12px;
-    background: #0f0f12;
-    border: 1px solid #1a1a1e;
-    color: #e4e4e7;
+    background: #171717;
+    border: 1px solid #2a2a2a;
+    color: #eeeeee;
     border-radius: 8px;
     font-size: 13px;
     font-family: inherit;
@@ -711,8 +840,8 @@
   .model-input:focus,
   .key-row input:focus {
     outline: none;
-    border-color: #10b981;
-    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.08);
+    border-color: #d6d3d1;
+    box-shadow: 0 0 0 3px rgba(214, 211, 209, 0.08);
   }
 
   .model-input {
@@ -731,13 +860,13 @@
 
   .hint {
     font-size: 11px;
-    color: #3f3f46;
+    color: #5f5f5f;
     margin: 0;
   }
 
   .field-error {
     font-size: 11px;
-    color: #f87171;
+    color: #d08c8c;
     margin: 0;
   }
 
@@ -746,8 +875,8 @@
     flex-direction: column;
     gap: 6px;
     padding: 10px;
-    background: #0f0f12;
-    border: 1px solid #1a1a1e;
+    background: #171717;
+    border: 1px solid #2a2a2a;
     border-radius: 8px;
   }
 
@@ -765,7 +894,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #52525b;
+    color: #787878;
   }
 
   code {
@@ -773,10 +902,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     padding: 3px 6px;
-    background: #18181b;
-    border: 1px solid #27272a;
+    background: #202020;
+    border: 1px solid #3a3a3a;
     border-radius: 5px;
-    color: #a1a1aa;
+    color: #bebebe;
     font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
     font-size: 10.5px;
   }
@@ -789,8 +918,8 @@
     gap: 10px;
     margin-top: 12px;
     padding: 12px;
-    background: #0f0f12;
-    border: 1px solid #1a1a1e;
+    background: #171717;
+    border: 1px solid #2a2a2a;
     border-radius: 10px;
   }
 
@@ -804,14 +933,14 @@
   .diagnostic-title {
     font-size: 13px;
     font-weight: 600;
-    color: #e4e4e7;
+    color: #eeeeee;
   }
 
   .diagnostic-error {
     padding: 8px 10px;
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px solid rgba(239, 68, 68, 0.16);
-    color: #fca5a5;
+    background: rgba(184, 92, 92, 0.10);
+    border: 1px solid rgba(184, 92, 92, 0.18);
+    color: #d08c8c;
     border-radius: 8px;
     font-size: 11.5px;
   }
@@ -821,8 +950,8 @@
     flex-direction: column;
     gap: 3px;
     padding: 10px;
-    background: rgba(16, 185, 129, 0.06);
-    border: 1px solid rgba(16, 185, 129, 0.14);
+    background: rgba(214, 211, 209, 0.06);
+    border: 1px solid rgba(214, 211, 209, 0.14);
     border-radius: 8px;
   }
 
@@ -830,19 +959,19 @@
   .diagnostic-row span,
   .diagnostic-grid span {
     font-size: 10px;
-    color: #52525b;
+    color: #787878;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: 700;
   }
 
   .diagnostic-result strong {
-    color: #34d399;
+    color: #f5f5f4;
     font-size: 13px;
   }
 
   .diagnostic-result small {
-    color: #86efac;
+    color: #d6d3d1;
     font-size: 11px;
     line-height: 1.4;
   }
@@ -871,17 +1000,77 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: #a1a1aa;
+    color: #bebebe;
     font-size: 11px;
     font-weight: 500;
+  }
+
+  /* ── Accessibility diagnostics ────── */
+
+  .ax-status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 99px;
+    background: #787878;
+    flex-shrink: 0;
+  }
+
+  .status-dot.ok { background: #d6d3d1; }
+  .status-dot.bad { background: #b85c5c; }
+
+  .ax-status-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: #eeeeee;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ax-outcome {
+    color: #f5f5f4;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .ax-outcome.fallback {
+    color: #c4a46b;
+  }
+
+  .ax-steps-toggle {
+    background: none;
+    border: none;
+    color: #9a9a9a;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0;
+    margin-top: 4px;
+  }
+
+  .ax-steps-toggle:hover {
+    color: #bebebe;
+  }
+
+  .ax-steps {
+    margin: 6px 0 0;
+    padding-left: 20px;
+    font-size: 11px;
+    color: #9a9a9a;
+    line-height: 1.6;
   }
 
   /* ── Buttons ──────────────────────── */
 
   .btn-primary {
     padding: 9px 20px;
-    background: #10b981;
-    color: #022c22;
+    background: #d6d3d1;
+    color: #171717;
     border: none;
     border-radius: 8px;
     cursor: pointer;
@@ -890,15 +1079,15 @@
     transition: all 0.12s ease;
   }
 
-  .btn-primary:hover:not(:disabled) { background: #34d399; }
+  .btn-primary:hover:not(:disabled) { background: #f5f5f4; }
   .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
   .full-width { width: 100%; }
 
   .btn-secondary {
     padding: 8px 14px;
-    background: #18181b;
-    color: #a1a1aa;
-    border: 1px solid #27272a;
+    background: #202020;
+    color: #bebebe;
+    border: 1px solid #3a3a3a;
     border-radius: 8px;
     cursor: pointer;
     font-size: 12px;
@@ -908,8 +1097,8 @@
   }
 
   .btn-secondary:hover:not(:disabled) {
-    background: #27272a;
-    color: #e4e4e7;
+    background: #3a3a3a;
+    color: #eeeeee;
   }
 
   .btn-secondary:disabled { opacity: 0.35; cursor: not-allowed; }
@@ -926,7 +1115,7 @@
     position: relative;
     width: 36px;
     height: 20px;
-    background: #27272a;
+    background: #3a3a3a;
     border-radius: 99px;
     transition: background 0.15s ease;
   }
@@ -946,13 +1135,13 @@
     left: 2px;
     width: 16px;
     height: 16px;
-    background: #52525b;
+    background: #787878;
     border-radius: 99px;
     transition: all 0.15s ease;
   }
 
-  .toggle-track.on { background: #059669; }
-  .toggle-track.on .toggle-thumb { left: 18px; background: #fff; }
+  .toggle-track.on { background: #a8a29e; }
+  .toggle-track.on .toggle-thumb { left: 18px; background: #ffffff; }
 
   /* ── Toast ────────────────────────── */
 
@@ -968,15 +1157,15 @@
   }
 
   .toast.success {
-    background: rgba(16, 185, 129, 0.08);
-    border: 1px solid rgba(16, 185, 129, 0.2);
-    color: #34d399;
+    background: rgba(214, 211, 209, 0.08);
+    border: 1px solid rgba(214, 211, 209, 0.20);
+    color: #f5f5f4;
   }
 
   .toast.error {
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px solid rgba(239, 68, 68, 0.2);
-    color: #fca5a5;
+    background: rgba(184, 92, 92, 0.10);
+    border: 1px solid rgba(184, 92, 92, 0.22);
+    color: #d08c8c;
   }
 
   @keyframes slideUp {

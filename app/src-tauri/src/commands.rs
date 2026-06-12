@@ -70,6 +70,8 @@ struct QuickEnhanceOutcome {
     resolution: TargetResolution,
     input_source: QuickEnhanceInputSource,
     delivery: QuickEnhanceDelivery,
+    /// Why selected text was copied instead of replaced, when known.
+    delivery_note: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,11 +100,12 @@ struct QuickEnhanceInput {
     prompt: String,
     source: QuickEnhanceInputSource,
     original_clipboard: Option<String>,
+    accessibility_untrusted: bool,
 }
 
-#[derive(Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SelectionCaptureDiagnostics {
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SelectionCaptureDiagnostics {
     timestamp_ms: u64,
     selected_text_enabled: bool,
     outcome: String,
@@ -265,6 +268,10 @@ async fn quick_enhance_from_available_input(
 
     if notify_progress {
         let progress = if captured.source == QuickEnhanceInputSource::Clipboard
+            && captured.accessibility_untrusted
+        {
+            "Selected text needs Accessibility permission (Settings > Diagnostics). Enhancing clipboard prompt instead...".to_string()
+        } else if captured.source == QuickEnhanceInputSource::Clipboard
             && config.quick_enhance.selected_text_enabled
         {
             "No selected text detected; enhancing clipboard prompt...".to_string()
@@ -295,7 +302,7 @@ async fn quick_enhance_from_available_input(
     .await?;
 
     let enhanced_prompt = result.response.enhanced_prompt.clone();
-    let delivery =
+    let (delivery, delivery_note) =
         deliver_quick_enhance_output(&app, &enhanced_prompt, &captured, environment.as_ref())
             .await?;
     record_prompt_history_if_enabled(NewPromptHistoryRecord {
@@ -312,6 +319,7 @@ async fn quick_enhance_from_available_input(
         resolution,
         input_source: captured.source,
         delivery,
+        delivery_note,
     })
 }
 
@@ -320,6 +328,8 @@ async fn capture_quick_enhance_input(
     config: &cfg::Config,
 ) -> anyhow::Result<QuickEnhanceInput> {
     let original_clipboard = app.clipboard().read_text().ok();
+    let accessibility_untrusted =
+        config.quick_enhance.selected_text_enabled && accessibility_trusted() == Some(false);
     let mut diagnostics =
         SelectionCaptureDiagnostics::new(config.quick_enhance.selected_text_enabled);
     if let Some((active_app, window_title)) = collect_active_app() {
@@ -356,6 +366,7 @@ async fn capture_quick_enhance_input(
                 prompt: selected_text,
                 source: QuickEnhanceInputSource::SelectedText,
                 original_clipboard,
+                accessibility_untrusted,
             });
         }
 
@@ -376,6 +387,7 @@ async fn capture_quick_enhance_input(
                     prompt: selected_text,
                     source: QuickEnhanceInputSource::SelectedText,
                     original_clipboard,
+                    accessibility_untrusted,
                 });
             }
         } else {
@@ -403,6 +415,7 @@ async fn capture_quick_enhance_input(
         prompt,
         source: QuickEnhanceInputSource::Clipboard,
         original_clipboard,
+        accessibility_untrusted,
     })
 }
 
@@ -411,16 +424,29 @@ async fn deliver_quick_enhance_output(
     enhanced_prompt: &str,
     captured: &QuickEnhanceInput,
     initial_environment: Option<&EnvironmentSnapshot>,
-) -> anyhow::Result<QuickEnhanceDelivery> {
-    if captured.source == QuickEnhanceInputSource::SelectedText
-        && active_app_matches_current(initial_environment)
-        && replace_selected_text(app, enhanced_prompt, captured.original_clipboard.as_ref()).await
-    {
-        return Ok(QuickEnhanceDelivery::ReplacedSelection);
+) -> anyhow::Result<(QuickEnhanceDelivery, Option<&'static str>)> {
+    if captured.source == QuickEnhanceInputSource::SelectedText {
+        if !active_app_matches_current(initial_environment) {
+            app.clipboard().write_text(enhanced_prompt)?;
+            return Ok((
+                QuickEnhanceDelivery::CopiedToClipboard,
+                Some("the focused app or window changed"),
+            ));
+        }
+
+        if replace_selected_text(app, enhanced_prompt, captured.original_clipboard.as_ref()).await {
+            return Ok((QuickEnhanceDelivery::ReplacedSelection, None));
+        }
+
+        app.clipboard().write_text(enhanced_prompt)?;
+        return Ok((
+            QuickEnhanceDelivery::CopiedToClipboard,
+            Some("pasting back into the app failed"),
+        ));
     }
 
     app.clipboard().write_text(enhanced_prompt)?;
-    Ok(QuickEnhanceDelivery::CopiedToClipboard)
+    Ok((QuickEnhanceDelivery::CopiedToClipboard, None))
 }
 
 fn quick_enhance_success_message(outcome: &QuickEnhanceOutcome) -> String {
@@ -439,12 +465,19 @@ fn quick_enhance_success_message(outcome: &QuickEnhanceOutcome) -> String {
         }
     };
 
-    format!(
+    let mut message = format!(
         "{} for {} — {}.",
         action,
         outcome.resolution.platform.label(),
         outcome.resolution.reason
-    )
+    );
+    if let Some(note) = outcome.delivery_note {
+        message.push_str(&format!(
+            " Couldn't replace the selection: {}. Paste to use it.",
+            note
+        ));
+    }
+    message
 }
 
 #[cfg(target_os = "macos")]
@@ -720,6 +753,67 @@ fn request_accessibility_permission_prompt() -> bool {
     let prompt_value = CFBoolean::true_value();
     let options = CFDictionary::from_CFType_pairs(&[(prompt_key, prompt_value)]);
     unsafe { AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef()) }
+}
+
+/// `Some(trusted)` on macOS, `None` where Accessibility does not apply.
+fn accessibility_trusted() -> Option<bool> {
+    #[cfg(target_os = "macos")]
+    {
+        Some(ax_is_process_trusted())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccessibilityStatus {
+    pub platform_supported: bool,
+    pub accessibility_trusted: Option<bool>,
+    pub selected_text_enabled: bool,
+    pub diagnostics_path: String,
+    pub last_capture: Option<SelectionCaptureDiagnostics>,
+}
+
+#[tauri::command]
+pub fn get_accessibility_status() -> Result<AccessibilityStatus, String> {
+    let config = cfg::load_config().map_err(|e| e.to_string())?;
+    let path = cfg::config_dir()
+        .map_err(|e| e.to_string())?
+        .join("selection-diagnostics.json");
+    let last_capture = fs::read_to_string(&path)
+        .ok()
+        .and_then(|content| serde_json::from_str(&content).ok());
+
+    Ok(AccessibilityStatus {
+        platform_supported: cfg!(target_os = "macos"),
+        accessibility_trusted: accessibility_trusted(),
+        selected_text_enabled: config.quick_enhance.selected_text_enabled,
+        diagnostics_path: path.display().to_string(),
+        last_capture,
+    })
+}
+
+#[tauri::command]
+pub fn open_accessibility_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let status = Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            .status()
+            .map_err(|e| e.to_string())?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err("Could not open System Settings".to_string())
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Accessibility settings are only available on macOS".to_string())
+    }
 }
 
 fn write_selection_capture_diagnostics(diagnostics: &SelectionCaptureDiagnostics) {

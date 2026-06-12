@@ -196,13 +196,13 @@
   h1 {
     font-size: 22px;
     font-weight: 650;
-    color: #fafafa;
+    color: #f5f5f5;
     letter-spacing: -0.5px;
   }
 
   .subtitle {
     font-size: 13px;
-    color: #52525b;
+    color: #787878;
     font-weight: 450;
   }
 
@@ -217,7 +217,7 @@
   .filter-chips {
     display: flex;
     gap: 3px;
-    background: #18181b;
+    background: #202020;
     padding: 3px;
     border-radius: 8px;
   }
@@ -226,7 +226,7 @@
     padding: 5px 12px;
     border: none;
     background: transparent;
-    color: #52525b;
+    color: #787878;
     cursor: pointer;
     font-size: 12px;
     font-weight: 550;
@@ -234,11 +234,11 @@
     transition: all 0.12s ease;
   }
 
-  .chip:hover { color: #a1a1aa; }
+  .chip:hover { color: #bebebe; }
 
   .chip.active {
-    background: #27272a;
-    color: #fafafa;
+    background: #3a3a3a;
+    color: #f5f5f5;
     box-shadow: 0 1px 2px rgba(0,0,0,0.3);
   }
 
@@ -252,25 +252,25 @@
     left: 10px;
     top: 50%;
     transform: translateY(-50%);
-    color: #3f3f46;
+    color: #5f5f5f;
     pointer-events: none;
   }
 
   .search {
     width: 100%;
     padding: 7px 10px 7px 30px;
-    background: #0f0f12;
-    border: 1px solid #1a1a1e;
-    color: #e4e4e7;
+    background: #171717;
+    border: 1px solid #2a2a2a;
+    color: #eeeeee;
     border-radius: 8px;
     font-size: 12.5px;
     font-family: inherit;
   }
 
-  .search::placeholder { color: #3f3f46; }
+  .search::placeholder { color: #5f5f5f; }
   .search:focus {
     outline: none;
-    border-color: #27272a;
+    border-color: #3a3a3a;
   }
 
   /* ── Empty ────────────────────────── */
@@ -278,7 +278,7 @@
   .empty {
     text-align: center;
     padding: 48px 0;
-    color: #3f3f46;
+    color: #5f5f5f;
     font-size: 13px;
   }
 
@@ -295,23 +295,23 @@
     flex-direction: column;
     gap: 5px;
     padding: 13px 14px;
-    background: #0f0f12;
-    border: 1px solid #1a1a1e;
+    background: #171717;
+    border: 1px solid #2a2a2a;
     border-radius: 10px;
     cursor: pointer;
     text-align: left;
-    color: #e4e4e7;
+    color: #eeeeee;
     transition: all 0.12s ease;
   }
 
   .card:hover {
-    border-color: #27272a;
-    background: #18181b;
+    border-color: #3a3a3a;
+    background: #202020;
   }
 
   .card.active {
-    border-color: rgba(16, 185, 129, 0.4);
-    background: rgba(16, 185, 129, 0.04);
+    border-color: rgba(214, 211, 209, 0.40);
+    background: rgba(214, 211, 209, 0.04);
   }
 
   .card-badges {
@@ -326,18 +326,18 @@
     letter-spacing: 0.5px;
     padding: 2px 6px;
     border-radius: 4px;
-    background: rgba(16, 185, 129, 0.1);
-    color: #34d399;
+    background: rgba(214, 211, 209, 0.10);
+    color: #f5f5f4;
   }
 
   .badge.img {
-    background: rgba(59, 130, 246, 0.1);
-    color: #60a5fa;
+    background: rgba(199, 194, 189, 0.10);
+    color: #c7c2bd;
   }
 
   .badge.trending {
-    background: rgba(251, 191, 36, 0.1);
-    color: #fbbf24;
+    background: rgba(196, 164, 107, 0.12);
+    color: #c4a46b;
     display: flex;
     align-items: center;
     padding: 2px 5px;
@@ -346,18 +346,18 @@
   .card-title {
     font-size: 13px;
     font-weight: 600;
-    color: #e4e4e7;
+    color: #eeeeee;
   }
 
   .card-desc {
     font-size: 11.5px;
-    color: #52525b;
+    color: #787878;
     line-height: 1.4;
   }
 
   .card-meta {
     font-size: 10px;
-    color: #3f3f46;
+    color: #5f5f5f;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-top: auto;
@@ -367,8 +367,8 @@
   /* ── Detail pane ──────────────────── */
 
   .detail {
-    background: #0f0f12;
-    border: 1px solid #1a1a1e;
+    background: #171717;
+    border: 1px solid #2a2a2a;
     border-radius: 12px;
     padding: 18px;
     display: flex;
@@ -392,21 +392,21 @@
   .detail-top h3 {
     font-size: 15px;
     font-weight: 650;
-    color: #fafafa;
+    color: #f5f5f5;
     letter-spacing: -0.2px;
   }
 
   .detail-desc {
     font-size: 12.5px;
-    color: #52525b;
+    color: #787878;
     margin-top: 2px;
   }
 
   .btn-ghost-sm {
     padding: 4px;
     background: transparent;
-    border: 1px solid #1a1a1e;
-    color: #52525b;
+    border: 1px solid #2a2a2a;
+    color: #787878;
     border-radius: 6px;
     cursor: pointer;
     display: flex;
@@ -417,9 +417,9 @@
   }
 
   .btn-ghost-sm:hover {
-    background: #18181b;
-    color: #a1a1aa;
-    border-color: #27272a;
+    background: #202020;
+    color: #bebebe;
+    border-color: #3a3a3a;
   }
 
   .field {
@@ -430,28 +430,28 @@
 
   .field label {
     font-size: 12px;
-    color: #71717a;
+    color: #9a9a9a;
     font-weight: 550;
   }
 
-  .req { color: #ef4444; }
+  .req { color: #b85c5c; }
 
   .field input {
     padding: 8px 12px;
-    background: #18181b;
-    border: 1px solid #27272a;
-    color: #e4e4e7;
+    background: #202020;
+    border: 1px solid #3a3a3a;
+    color: #eeeeee;
     border-radius: 8px;
     font-size: 13px;
     font-family: inherit;
   }
 
-  .field input::placeholder { color: #3f3f46; }
+  .field input::placeholder { color: #5f5f5f; }
 
   .field input:focus {
     outline: none;
-    border-color: #10b981;
-    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.08);
+    border-color: #d6d3d1;
+    box-shadow: 0 0 0 3px rgba(214, 211, 209, 0.08);
   }
 
   .detail-actions {
@@ -462,8 +462,8 @@
 
   .btn-primary {
     padding: 8px 18px;
-    background: #10b981;
-    color: #022c22;
+    background: #d6d3d1;
+    color: #171717;
     border: none;
     border-radius: 8px;
     cursor: pointer;
@@ -472,13 +472,13 @@
     transition: all 0.12s ease;
   }
 
-  .btn-primary:hover { background: #34d399; }
+  .btn-primary:hover { background: #f5f5f4; }
 
   .btn-ghost {
     padding: 8px 14px;
     background: transparent;
-    color: #71717a;
-    border: 1px solid #27272a;
+    color: #9a9a9a;
+    border: 1px solid #3a3a3a;
     border-radius: 8px;
     cursor: pointer;
     font-size: 12.5px;
@@ -487,29 +487,29 @@
   }
 
   .btn-ghost:hover {
-    color: #a1a1aa;
-    border-color: #3f3f46;
-    background: #18181b;
+    color: #bebebe;
+    border-color: #5f5f5f;
+    background: #202020;
   }
 
   .btn-ghost.copied {
-    color: #34d399;
-    border-color: rgba(16, 185, 129, 0.3);
-    background: rgba(16, 185, 129, 0.06);
+    color: #f5f5f4;
+    border-color: rgba(214, 211, 209, 0.30);
+    background: rgba(214, 211, 209, 0.06);
   }
 
   .output {
     padding: 14px;
     margin: 0;
-    background: #18181b;
-    border: 1px solid #27272a;
+    background: #202020;
+    border: 1px solid #3a3a3a;
     border-radius: 8px;
     white-space: pre-wrap;
     word-wrap: break-word;
     font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
     font-size: 12px;
     line-height: 1.6;
-    color: #d4d4d8;
+    color: #dedede;
     max-height: 240px;
     overflow-y: auto;
   }
@@ -517,6 +517,6 @@
   .footer-count {
     text-align: center;
     font-size: 11px;
-    color: #3f3f46;
+    color: #5f5f5f;
   }
 </style>
