@@ -1,17 +1,19 @@
 # macOS signing and notarization
 
-Proompt's desktop product is hotkey-first, so macOS Accessibility/TCC reliability matters. Unsigned or ad-hoc signed builds can appear trusted in System Settings while a rebuilt or replaced binary is not actually trusted. Release builds should therefore be Developer ID signed and notarized before broader distribution.
+Proompt's desktop product is hotkey-first, so macOS Accessibility/TCC reliability matters. Unsigned or ad-hoc signed builds can appear trusted in System Settings while a rebuilt or replaced binary is not actually trusted. Release builds should eventually be Developer ID signed and notarized before broader distribution.
+
+Developer ID signing is currently **optional and deferred** until the Apple Developer Program cost makes sense. The project can keep shipping unsigned macOS DMGs in the meantime.
 
 ## Current workflow behavior
 
 The release workflow supports two modes for the macOS desktop app:
 
-1. **Unsigned fallback**: if no Apple signing secrets are configured, the workflow still builds and uploads the DMG, but emits a warning. This preserves release continuity while signing is being set up.
+1. **Unsigned fallback**: if no Apple signing secrets are configured, the workflow still builds and uploads the DMG, but emits a warning. This is the expected path while Developer ID signing is deferred and requires no Apple Developer account.
 2. **Signed and notarized**: if Apple signing secrets are configured, the workflow fails fast on partial configuration, builds with Tauri's signing/notarization support, verifies the resulting app, validates stapled tickets, then uploads the DMG.
 
-The workflow intentionally does **not** publish a signed-but-not-notarized app. Partial signing configuration fails the release instead of silently shipping a confusing Gatekeeper/TCC state.
+The workflow intentionally does **not** publish a signed-but-not-notarized app. Partial signing configuration fails the release instead of silently shipping a confusing Gatekeeper/TCC state. If signing is intentionally deferred, leave all Apple signing/notarization secrets unset.
 
-## Required Apple assets
+## Required Apple assets for future signed releases
 
 You need:
 

@@ -22,6 +22,7 @@ This file contains only metadata such as capture status, error codes, active app
 
 - Desktop DMG is macOS Apple Silicon only for now.
 - Desktop app is [signed and notarized / unsigned and not notarized].
+- Unsigned releases are expected while Developer ID signing is deferred.
 - If this is an unsigned build and macOS says the app is damaged, run:
 
 ```bash
