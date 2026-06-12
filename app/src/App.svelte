@@ -126,8 +126,8 @@
       "Inter",
       "Segoe UI",
       sans-serif;
-    background: #09090b;
-    color: #fafafa;
+    background: #111111;
+    color: #f5f5f5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
@@ -140,11 +140,11 @@
     background: transparent;
   }
   :global(::-webkit-scrollbar-thumb) {
-    background: #27272a;
+    background: #3a3a3a;
     border-radius: 99px;
   }
   :global(::-webkit-scrollbar-thumb:hover) {
-    background: #3f3f46;
+    background: #5f5f5f;
   }
 
   .app-shell {
@@ -156,8 +156,8 @@
   .sidebar {
     width: 200px;
     min-width: 200px;
-    background: #09090b;
-    border-right: 1px solid #1a1a1e;
+    background: #111111;
+    border-right: 1px solid #2a2a2a;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -182,19 +182,20 @@
   .brand-mark {
     width: 28px;
     height: 28px;
-    background: linear-gradient(145deg, #10b981, #059669);
+    background: #1f1f1f;
+    border: 1px solid #3a3a3a;
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: #e7e5e4;
     flex-shrink: 0;
   }
 
   .brand-text {
     font-weight: 650;
     font-size: 15px;
-    color: #fafafa;
+    color: #f5f5f5;
     letter-spacing: -0.4px;
   }
 
@@ -212,7 +213,7 @@
     padding: 8px 10px;
     border: none;
     background: transparent;
-    color: #71717a;
+    color: #9a9a9a;
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
@@ -222,17 +223,17 @@
   }
 
   .nav-item:hover {
-    color: #a1a1aa;
-    background: #18181b;
+    color: #bebebe;
+    background: #202020;
   }
 
   .nav-item.active {
-    color: #fafafa;
-    background: #18181b;
+    color: #f5f5f5;
+    background: #202020;
   }
 
   .nav-item.active svg {
-    color: #10b981;
+    color: #d6d3d1;
   }
 
   .sidebar-bottom {
@@ -241,19 +242,19 @@
 
   .version {
     font-size: 11px;
-    color: #3f3f46;
+    color: #5f5f5f;
     font-weight: 500;
   }
 
   .main {
     flex: 1;
     overflow-y: auto;
-    background: #09090b;
+    background: #111111;
   }
 
   .main-inner {
-    max-width: 760px;
+    max-width: 820px;
     margin: 0 auto;
-    padding: 32px 28px;
+    padding: 34px 30px;
   }
 </style>

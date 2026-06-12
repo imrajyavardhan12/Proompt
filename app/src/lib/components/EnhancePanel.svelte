@@ -492,13 +492,13 @@
   h1 {
     font-size: 22px;
     font-weight: 650;
-    color: #fafafa;
+    color: #f5f5f5;
     letter-spacing: -0.5px;
   }
 
   .subtitle {
     font-size: 13px;
-    color: #52525b;
+    color: #787878;
     font-weight: 450;
   }
 
@@ -509,8 +509,8 @@
     align-items: center;
     gap: 10px;
     padding: 10px 12px;
-    background: #0f0f12;
-    border: 1px solid #1a1a1e;
+    background: #171717;
+    border: 1px solid #2a2a2a;
     border-radius: 10px;
   }
 
@@ -518,8 +518,8 @@
     width: 28px;
     height: 28px;
     border-radius: 8px;
-    background: rgba(16, 185, 129, 0.08);
-    color: #34d399;
+    background: rgba(214, 211, 209, 0.08);
+    color: #f5f5f4;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -532,11 +532,11 @@
     gap: 8px;
     min-width: 0;
     font-size: 12px;
-    color: #71717a;
+    color: #9a9a9a;
   }
 
   .quick-tip-copy strong {
-    color: #d4d4d8;
+    color: #dedede;
     font-weight: 600;
     white-space: nowrap;
   }
@@ -553,14 +553,14 @@
     display: flex;
     gap: 14px;
     padding: 16px;
-    background: rgba(16, 185, 129, 0.06);
-    border: 1px solid rgba(16, 185, 129, 0.2);
+    background: rgba(214, 211, 209, 0.06);
+    border: 1px solid rgba(214, 211, 209, 0.20);
     border-radius: 12px;
   }
 
   .setup-card.warning {
-    background: rgba(251, 191, 36, 0.06);
-    border-color: rgba(251, 191, 36, 0.24);
+    background: rgba(196, 164, 107, 0.08);
+    border-color: rgba(196, 164, 107, 0.24);
   }
 
   .setup-icon {
@@ -571,13 +571,13 @@
     justify-content: center;
     flex-shrink: 0;
     border-radius: 10px;
-    background: rgba(16, 185, 129, 0.12);
-    color: #34d399;
+    background: rgba(214, 211, 209, 0.12);
+    color: #f5f5f4;
   }
 
   .setup-card.warning .setup-icon {
-    background: rgba(251, 191, 36, 0.12);
-    color: #fbbf24;
+    background: rgba(196, 164, 107, 0.14);
+    color: #c4a46b;
   }
 
   .setup-content {
@@ -590,24 +590,24 @@
   .setup-content h2 {
     font-size: 14px;
     font-weight: 650;
-    color: #fafafa;
+    color: #f5f5f5;
     letter-spacing: -0.2px;
   }
 
   .setup-content p {
     font-size: 12.5px;
-    color: #a1a1aa;
+    color: #bebebe;
     line-height: 1.45;
     margin: 0;
   }
 
   .setup-content strong {
-    color: #d4d4d8;
+    color: #dedede;
     font-weight: 600;
   }
 
   .setup-recommendation {
-    color: #34d399 !important;
+    color: #f5f5f4 !important;
   }
 
   .setup-guide-inline {
@@ -624,7 +624,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #52525b;
+    color: #787878;
   }
 
   .setup-guide-inline code {
@@ -632,10 +632,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     padding: 3px 6px;
-    background: #18181b;
-    border: 1px solid #27272a;
+    background: #202020;
+    border: 1px solid #3a3a3a;
     border-radius: 5px;
-    color: #a1a1aa;
+    color: #bebebe;
     font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
     font-size: 10.5px;
   }
@@ -649,8 +649,8 @@
   /* ── Card ─────────────────────────── */
 
   .card {
-    background: #0f0f12;
-    border: 1px solid #1a1a1e;
+    background: #171717;
+    border: 1px solid #2a2a2a;
     border-radius: 12px;
     overflow: hidden;
   }
@@ -667,14 +667,14 @@
 
   .divider {
     height: 1px;
-    background: #1a1a1e;
+    background: #2a2a2a;
   }
 
   /* ── Mode switch ──────────────────── */
 
   .mode-switch {
     display: inline-flex;
-    background: #18181b;
+    background: #202020;
     border-radius: 8px;
     padding: 3px;
     gap: 2px;
@@ -687,7 +687,7 @@
     padding: 6px 14px;
     border: none;
     background: transparent;
-    color: #52525b;
+    color: #787878;
     cursor: pointer;
     font-size: 12.5px;
     font-weight: 550;
@@ -696,13 +696,13 @@
   }
 
   .mode-switch button.active {
-    background: #27272a;
-    color: #fafafa;
+    background: #3a3a3a;
+    color: #f5f5f5;
     box-shadow: 0 1px 2px rgba(0,0,0,0.3);
   }
 
   .mode-switch button.active svg {
-    color: #10b981;
+    color: #d6d3d1;
   }
 
   /* ── Labels & chips ───────────────── */
@@ -714,7 +714,7 @@
   .label {
     font-size: 11.5px;
     font-weight: 600;
-    color: #52525b;
+    color: #787878;
     text-transform: uppercase;
     letter-spacing: 0.6px;
   }
@@ -734,7 +734,7 @@
   .chip-group-label {
     font-size: 10.5px;
     font-weight: 600;
-    color: #3f3f46;
+    color: #5f5f5f;
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -747,9 +747,9 @@
 
   .chip {
     padding: 5px 12px;
-    border: 1px solid #27272a;
+    border: 1px solid #3a3a3a;
     background: transparent;
-    color: #71717a;
+    color: #9a9a9a;
     border-radius: 6px;
     cursor: pointer;
     font-size: 12px;
@@ -758,14 +758,14 @@
   }
 
   .chip:hover {
-    color: #a1a1aa;
-    border-color: #3f3f46;
+    color: #bebebe;
+    border-color: #5f5f5f;
   }
 
   .chip.active {
-    background: rgba(16, 185, 129, 0.1);
-    border-color: rgba(16, 185, 129, 0.35);
-    color: #34d399;
+    background: rgba(214, 211, 209, 0.10);
+    border-color: rgba(214, 211, 209, 0.35);
+    color: #f5f5f4;
   }
 
   /* ── Textarea ─────────────────────── */
@@ -778,9 +778,9 @@
     width: 100%;
     padding: 12px 14px;
     padding-bottom: 36px;
-    border: 1px solid #27272a;
-    background: #18181b;
-    color: #e4e4e7;
+    border: 1px solid #3a3a3a;
+    background: #202020;
+    color: #eeeeee;
     border-radius: 10px;
     resize: vertical;
     font-family: inherit;
@@ -791,13 +791,13 @@
   }
 
   textarea::placeholder {
-    color: #3f3f46;
+    color: #5f5f5f;
   }
 
   textarea:focus {
     outline: none;
-    border-color: #10b981;
-    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.08);
+    border-color: #d6d3d1;
+    box-shadow: 0 0 0 3px rgba(214, 211, 209, 0.08);
   }
 
   .textarea-footer {
@@ -812,7 +812,7 @@
 
   .char-count {
     font-size: 10.5px;
-    color: #3f3f46;
+    color: #5f5f5f;
     font-variant-numeric: tabular-nums;
   }
 
@@ -825,10 +825,10 @@
     font-family: inherit;
     font-size: 10px;
     padding: 1px 5px;
-    background: #27272a;
-    color: #52525b;
+    background: #3a3a3a;
+    color: #787878;
     border-radius: 4px;
-    border: 1px solid #3f3f46;
+    border: 1px solid #5f5f5f;
     font-weight: 500;
   }
 
@@ -845,7 +845,7 @@
     position: relative;
     width: 32px;
     height: 18px;
-    background: #27272a;
+    background: #3a3a3a;
     border-radius: 99px;
     transition: background 0.15s ease;
   }
@@ -865,23 +865,23 @@
     left: 2px;
     width: 14px;
     height: 14px;
-    background: #52525b;
+    background: #787878;
     border-radius: 99px;
     transition: all 0.15s ease;
   }
 
   .toggle-track.on {
-    background: #059669;
+    background: #a8a29e;
   }
 
   .toggle-track.on .toggle-thumb {
     left: 16px;
-    background: #fff;
+    background: #ffffff;
   }
 
   .toggle-label {
     font-size: 12.5px;
-    color: #71717a;
+    color: #9a9a9a;
     font-weight: 500;
   }
 
@@ -889,8 +889,8 @@
 
   .btn-primary {
     padding: 8px 20px;
-    background: #10b981;
-    color: #022c22;
+    background: #d6d3d1;
+    color: #171717;
     border: none;
     border-radius: 8px;
     cursor: pointer;
@@ -903,7 +903,7 @@
   }
 
   .btn-primary:hover:not(:disabled) {
-    background: #34d399;
+    background: #f5f5f4;
   }
 
   .btn-primary:active:not(:disabled) {
@@ -917,9 +917,9 @@
 
   .btn-secondary {
     padding: 7px 13px;
-    background: #18181b;
-    color: #a1a1aa;
-    border: 1px solid #27272a;
+    background: #202020;
+    color: #bebebe;
+    border: 1px solid #3a3a3a;
     border-radius: 8px;
     cursor: pointer;
     font-size: 12px;
@@ -929,8 +929,8 @@
   }
 
   .btn-secondary:hover {
-    background: #27272a;
-    color: #e4e4e7;
+    background: #3a3a3a;
+    color: #eeeeee;
   }
 
   .btn-ghost {
@@ -939,8 +939,8 @@
     gap: 5px;
     padding: 5px 10px;
     background: transparent;
-    color: #71717a;
-    border: 1px solid #27272a;
+    color: #9a9a9a;
+    border: 1px solid #3a3a3a;
     border-radius: 6px;
     cursor: pointer;
     font-size: 12px;
@@ -949,22 +949,22 @@
   }
 
   .btn-ghost:hover {
-    color: #a1a1aa;
-    border-color: #3f3f46;
-    background: #18181b;
+    color: #bebebe;
+    border-color: #5f5f5f;
+    background: #202020;
   }
 
   .btn-ghost.copied {
-    color: #34d399;
-    border-color: rgba(16, 185, 129, 0.3);
-    background: rgba(16, 185, 129, 0.08);
+    color: #f5f5f4;
+    border-color: rgba(214, 211, 209, 0.30);
+    background: rgba(214, 211, 209, 0.08);
   }
 
   .spinner {
     width: 14px;
     height: 14px;
     border: 2px solid rgba(2, 44, 34, 0.3);
-    border-top-color: #022c22;
+    border-top-color: #171717;
     border-radius: 50%;
     animation: spin 0.55s linear infinite;
   }
@@ -977,9 +977,9 @@
 
   .alert-error {
     padding: 10px 14px;
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px solid rgba(239, 68, 68, 0.2);
-    color: #fca5a5;
+    background: rgba(184, 92, 92, 0.10);
+    border: 1px solid rgba(184, 92, 92, 0.22);
+    color: #d08c8c;
     border-radius: 10px;
     font-size: 12.5px;
     line-height: 1.45;
@@ -988,8 +988,8 @@
   /* ── Result ───────────────────────── */
 
   .result {
-    background: #0f0f12;
-    border: 1px solid #1a1a1e;
+    background: #171717;
+    border: 1px solid #2a2a2a;
     border-radius: 12px;
     overflow: hidden;
     animation: slideUp 0.25s ease;
@@ -1005,7 +1005,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 16px;
-    border-bottom: 1px solid #1a1a1e;
+    border-bottom: 1px solid #2a2a2a;
   }
 
   .result-bar-left {
@@ -1013,22 +1013,22 @@
     align-items: center;
     gap: 8px;
     font-size: 12px;
-    color: #71717a;
+    color: #9a9a9a;
     font-weight: 500;
   }
 
   .result-dot {
     width: 7px;
     height: 7px;
-    background: #10b981;
+    background: #d6d3d1;
     border-radius: 50%;
   }
 
   .result-stale {
     font-size: 10.5px;
-    color: #fbbf24;
-    border: 1px solid rgba(251, 191, 36, 0.25);
-    background: rgba(251, 191, 36, 0.08);
+    color: #c4a46b;
+    border: 1px solid rgba(196, 164, 107, 0.25);
+    background: rgba(196, 164, 107, 0.10);
     padding: 2px 6px;
     border-radius: 999px;
   }
@@ -1041,7 +1041,7 @@
     font-family: "SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, monospace;
     font-size: 12.5px;
     line-height: 1.7;
-    color: #d4d4d8;
+    color: #dedede;
     max-height: 380px;
     overflow-y: auto;
     background: transparent;
