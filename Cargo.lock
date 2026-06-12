@@ -3229,7 +3229,7 @@ dependencies = [
 
 [[package]]
 name = "proompt-app"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "anyhow",
  "core-foundation 0.10.1",
@@ -3248,7 +3248,7 @@ dependencies = [
 
 [[package]]
 name = "proompt-cli"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -3265,7 +3265,7 @@ dependencies = [
 
 [[package]]
 name = "proompt-core"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "anyhow",
  "dirs",
