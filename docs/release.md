@@ -58,7 +58,18 @@ xattr -dr com.apple.quarantine /Applications/Proompt.app
 open /Applications/Proompt.app
 ```
 
-## 3. Commit and push
+## 3. Write release notes
+
+Create curated release notes before tagging so GitHub does not fall back to auto-generated PR bullets:
+
+```bash
+cp docs/releases/TEMPLATE.md docs/releases/vX.Y.Z.md
+$EDITOR docs/releases/vX.Y.Z.md
+```
+
+Use the `v0.3.0`/`v0.3.1` style: grouped headings, user impact first, macOS Accessibility/signing caveats when relevant, and a full changelog compare link.
+
+## 4. Commit and push
 
 ```bash
 git status --short
@@ -69,21 +80,25 @@ git push origin main
 
 Wait for CI on `main` to pass.
 
-## 4. Tag
+## 5. Tag
 
 ```bash
 git tag -a vX.Y.Z -m "Proompt vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-The release workflow will create/update the GitHub Release and upload:
+The release workflow will:
 
-- Linux CLI archive
-- macOS CLI archive
-- Windows CLI archive
-- macOS Apple Silicon desktop `.dmg`
+1. Create a draft GitHub Release.
+2. Use `docs/releases/vX.Y.Z.md` if present; otherwise generate notes once.
+3. Build and upload:
+   - Linux CLI archive
+   - macOS CLI archive
+   - Windows CLI archive
+   - macOS Apple Silicon desktop `.dmg`
+4. Publish the draft only after all build/upload jobs pass.
 
-## 5. Verify GitHub Release
+## 6. Verify GitHub Release
 
 ```bash
 gh release view vX.Y.Z --json url,assets --jq '{url, assets:[.assets[].name]}'
@@ -104,7 +119,7 @@ xattr -dr com.apple.quarantine /Applications/Proompt.app
 open /Applications/Proompt.app
 ```
 
-## 6. If a release workflow fix is needed after tagging
+## 7. If a release workflow fix is needed after tagging
 
 Do not mutate the old tag unless it was never shared. Prefer a patch release:
 
