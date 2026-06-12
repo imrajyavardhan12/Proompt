@@ -46,6 +46,7 @@ Smoke-check:
 - Provider list includes OpenRouter
 - Templates tab loads built-in templates
 - Enhance tab validates missing provider key with an actionable error
+- If Quick Enhance selected-text behavior changed, run `docs/unsigned-macos-qa.md`
 
 macOS signing note:
 
