@@ -270,7 +270,7 @@ async fn quick_enhance_from_available_input(
         let progress = if captured.source == QuickEnhanceInputSource::Clipboard
             && captured.accessibility_untrusted
         {
-            "Selected text needs Accessibility permission (Settings > Diagnostics). Enhancing clipboard prompt instead...".to_string()
+            "Selected text needs Accessibility permission (Settings > Selected-text diagnostics). Enhancing clipboard prompt instead...".to_string()
         } else if captured.source == QuickEnhanceInputSource::Clipboard
             && config.quick_enhance.selected_text_enabled
         {
