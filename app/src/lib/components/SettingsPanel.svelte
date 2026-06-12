@@ -96,6 +96,7 @@
   let currentProvider = $derived(providers.find((p) => p.id === provider) ?? providers[0]);
   let modelError = $derived(validateModel(provider, model));
   let quickEnhanceHotkeyDisplay = $derived(formatHotkey(quickEnhanceHotkey));
+  const accessibilityResetCommand = "tccutil reset Accessibility com.proompt.desktop";
 
   async function loadConfig() {
     try {
@@ -137,6 +138,20 @@
       await invoke("open_accessibility_settings");
     } catch (e: any) {
       showStatus("error", `${e}`);
+    }
+  }
+
+  async function copyAccessibilityResetCommand() {
+    try {
+      await invoke("copy_to_clipboard", { text: accessibilityResetCommand });
+      showStatus("success", "Accessibility reset command copied");
+    } catch (e: any) {
+      try {
+        await navigator.clipboard.writeText(accessibilityResetCommand);
+        showStatus("success", "Accessibility reset command copied");
+      } catch {
+        showStatus("error", `${e}`);
+      }
     }
   }
 
@@ -509,11 +524,25 @@
           </div>
 
           {#if axStatus.accessibilityTrusted === false}
+            <div class="ax-help-card">
+              <strong>Enable selected-text Quick Enhance</strong>
+              <ol>
+                <li>Open Privacy &amp; Security → Accessibility.</li>
+                <li>Enable Proompt for the currently installed app.</li>
+                <li>If Proompt already looks enabled but capture still fails, reset permission and grant it again.</li>
+              </ol>
+              <div class="command-row">
+                <code>{accessibilityResetCommand}</code>
+                <button class="btn-secondary" onclick={copyAccessibilityResetCommand}>Copy reset command</button>
+              </div>
+              <p class="hint" style="margin: 0">
+                This is expected for unsigned macOS builds after replacing or rebuilding the app. It does not send selected text or prompt content anywhere.
+              </p>
+            </div>
+          {:else if axStatus.accessibilityTrusted === true}
             <p class="hint">
-              Enable Proompt under Privacy &amp; Security → Accessibility. If it already looks enabled
-              but capture still fails (common after replacing an unsigned build), reset and re-grant:
+              If a future unsigned update stops capturing selected text, reset Accessibility for Proompt and grant it again.
             </p>
-            <code>tccutil reset Accessibility com.proompt.desktop</code>
           {/if}
 
           {#if axStatus.lastCapture && axStatus.lastCapture.outcome !== "not_started"}
@@ -1041,6 +1070,40 @@
 
   .ax-outcome.fallback {
     color: #c4a46b;
+  }
+
+  .ax-help-card {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 10px;
+    background: rgba(214, 211, 209, 0.05);
+    border: 1px solid rgba(214, 211, 209, 0.12);
+    border-radius: 8px;
+  }
+
+  .ax-help-card strong {
+    color: #eeeeee;
+    font-size: 12.5px;
+  }
+
+  .ax-help-card ol {
+    margin: 0;
+    padding-left: 18px;
+    color: #bebebe;
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+
+  .command-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .command-row code {
+    flex: 1;
   }
 
   .ax-steps-toggle {

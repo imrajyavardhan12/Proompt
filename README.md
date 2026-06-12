@@ -74,7 +74,7 @@ For coding agents, prefix clipboard text to override the target without opening 
 
 Proompt strips the prefix, enhances for that target, replaces the selected text when possible, otherwise copies the result, and notifies which target was used and why. When auto-detect is enabled, Quick Enhance can route from active apps such as Cursor, ChatGPT, Claude, supported browser window titles, or a configured terminal default. Settings includes a local clipboard route preview, and History records actual hotkey routing decisions.
 
-Selected-text capture/replacement on macOS requires Accessibility permission. If an unsigned development build appears enabled but stops capturing selections after rebuilds, reset permission with `tccutil reset Accessibility com.proompt.desktop`, relaunch the current `/Applications/Proompt.app`, and grant Accessibility again.
+Selected-text capture/replacement on macOS requires Accessibility permission. Settings includes Selected-text diagnostics, a System Settings shortcut, and a copyable reset command. If an unsigned build appears enabled but stops capturing selections after an update/rebuild, reset permission with `tccutil reset Accessibility com.proompt.desktop`, relaunch the current `/Applications/Proompt.app`, and grant Accessibility again.
 
 ### CLI
 
