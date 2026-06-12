@@ -135,6 +135,7 @@ jobs:
 
       - name: Validate macOS signing configuration
         env:
+          PROOMPT_ENABLE_MACOS_SIGNING: ${{ secrets.PROOMPT_ENABLE_MACOS_SIGNING }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -146,6 +147,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          if [[ "${PROOMPT_ENABLE_MACOS_SIGNING:-}" != "true" ]]; then
+            echo "PROOMPT_MACOS_SIGNING_MODE=unsigned" >> "$GITHUB_ENV"
+            echo "Developer ID signing is disabled; building unsigned macOS DMG."
+            echo "This is expected while Developer ID signing is deferred. Set PROOMPT_ENABLE_MACOS_SIGNING=true plus complete Apple secrets to enable signing later."
+            exit 0
+          fi
 
           has_cert=false
           if [[ -n "${APPLE_CERTIFICATE:-}" || -n "${APPLE_CERTIFICATE_PASSWORD:-}" ]]; then
@@ -162,17 +170,10 @@ jobs:
             has_password_notary=true
           fi
 
-          if [[ "$has_cert" == false && "$has_api_notary" == false && "$has_password_notary" == false ]]; then
-            echo "PROOMPT_MACOS_SIGNING_MODE=unsigned" >> "$GITHUB_ENV"
-            echo "No Apple signing secrets configured; building unsigned macOS DMG."
-            echo "This is expected while Developer ID signing is deferred. No Apple Developer account is required for unsigned releases."
-            exit 0
-          fi
-
           if [[ -z "${APPLE_CERTIFICATE:-}" || -z "${APPLE_CERTIFICATE_PASSWORD:-}" ]]; then
             echo "Partial Apple signing configuration detected." >&2
             echo "APPLE_CERTIFICATE and APPLE_CERTIFICATE_PASSWORD are required for signed macOS releases." >&2
-            echo "If signing is intentionally deferred, remove all APPLE_* signing/notarization secrets so the unsigned fallback path is used." >&2
+            echo "If signing is intentionally deferred, unset PROOMPT_ENABLE_MACOS_SIGNING or set it to anything other than true." >&2
             exit 1
           fi
 
@@ -180,7 +181,7 @@ jobs:
             if [[ -z "${APPLE_API_KEY:-}" || -z "${APPLE_API_ISSUER:-}" || -z "${APPLE_API_PRIVATE_KEY:-}" ]]; then
               echo "Partial API-key notarization configuration detected." >&2
               echo "APPLE_API_KEY, APPLE_API_ISSUER, and APPLE_API_PRIVATE_KEY must all be set for API-key notarization." >&2
-              echo "If signing is intentionally deferred, remove all APPLE_* signing/notarization secrets so the unsigned fallback path is used." >&2
+              echo "If signing is intentionally deferred, unset PROOMPT_ENABLE_MACOS_SIGNING or set it to anything other than true." >&2
               exit 1
             fi
 
@@ -194,7 +195,7 @@ jobs:
             if [[ -z "${APPLE_ID:-}" || -z "${APPLE_PASSWORD:-}" || -z "${APPLE_TEAM_ID:-}" ]]; then
               echo "Partial Apple ID notarization configuration detected." >&2
               echo "APPLE_ID, APPLE_PASSWORD, and APPLE_TEAM_ID must all be set for Apple ID notarization." >&2
-              echo "If signing is intentionally deferred, remove all APPLE_* signing/notarization secrets so the unsigned fallback path is used." >&2
+              echo "If signing is intentionally deferred, unset PROOMPT_ENABLE_MACOS_SIGNING or set it to anything other than true." >&2
               exit 1
             fi
           fi
@@ -202,14 +203,20 @@ jobs:
           if [[ "$has_api_notary" == false && "$has_password_notary" == false ]]; then
             echo "Notarization credentials are required for signed macOS releases." >&2
             echo "Set either APPLE_API_KEY/APPLE_API_ISSUER/APPLE_API_PRIVATE_KEY or APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID." >&2
-            echo "If signing is intentionally deferred, remove all APPLE_* signing/notarization secrets so the unsigned fallback path is used." >&2
+            echo "If signing is intentionally deferred, unset PROOMPT_ENABLE_MACOS_SIGNING or set it to anything other than true." >&2
             exit 1
           fi
 
           echo "PROOMPT_MACOS_SIGNING_MODE=signed-notarized" >> "$GITHUB_ENV"
           echo "Apple signing and notarization secrets are configured."
 
-      - name: Build Tauri app
+      - name: Build unsigned Tauri app
+        if: env.PROOMPT_MACOS_SIGNING_MODE == 'unsigned'
+        working-directory: app
+        run: bunx tauri build --ci --no-sign
+
+      - name: Build signed and notarized Tauri app
+        if: env.PROOMPT_MACOS_SIGNING_MODE == 'signed-notarized'
         working-directory: app
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}

@@ -8,10 +8,10 @@ Developer ID signing is currently **optional and deferred** until the Apple Deve
 
 The release workflow supports two modes for the macOS desktop app:
 
-1. **Unsigned fallback**: if no Apple signing secrets are configured, the workflow still builds and uploads the DMG, but emits a warning. This is the expected path while Developer ID signing is deferred and requires no Apple Developer account.
-2. **Signed and notarized**: if Apple signing secrets are configured, the workflow fails fast on partial configuration, builds with Tauri's signing/notarization support, verifies the resulting app, validates stapled tickets, then uploads the DMG.
+1. **Unsigned fallback**: if `PROOMPT_ENABLE_MACOS_SIGNING` is not set to `true`, the workflow builds with `--no-sign` and uploads the unsigned DMG. This is the expected path while Developer ID signing is deferred and requires no Apple Developer account.
+2. **Signed and notarized**: if `PROOMPT_ENABLE_MACOS_SIGNING=true` and Apple signing secrets are configured, the workflow fails fast on partial configuration, builds with Tauri's signing/notarization support, verifies the resulting app, validates stapled tickets, then uploads the DMG.
 
-The workflow intentionally does **not** publish a signed-but-not-notarized app. Partial signing configuration fails the release instead of silently shipping a confusing Gatekeeper/TCC state. If signing is intentionally deferred, leave all Apple signing/notarization secrets unset.
+The workflow intentionally does **not** publish a signed-but-not-notarized app. Partial signing configuration fails the release instead of silently shipping a confusing Gatekeeper/TCC state. If signing is intentionally deferred, leave `PROOMPT_ENABLE_MACOS_SIGNING` unset or set to anything other than `true`.
 
 ## Required Apple assets for future signed releases
 
@@ -25,7 +25,13 @@ You need:
 
 ### Signing certificate
 
-Set both:
+Set this explicit opt-in first:
+
+| Secret | Value |
+| --- | --- |
+| `PROOMPT_ENABLE_MACOS_SIGNING` | `true` only when Developer ID signing should be active. Leave unset while signing is deferred. |
+
+Then set both certificate secrets:
 
 | Secret | Value |
 | --- | --- |
