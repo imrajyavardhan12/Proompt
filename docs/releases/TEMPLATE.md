@@ -21,8 +21,8 @@ This file contains only metadata such as capture status, error codes, active app
 ### Desktop release note
 
 - Desktop DMG is macOS Apple Silicon only for now.
-- Desktop app is unsigned/not notarized.
-- If macOS says the app is damaged, run:
+- Desktop app is [signed and notarized / unsigned and not notarized].
+- If this is an unsigned build and macOS says the app is damaged, run:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Proompt.app
