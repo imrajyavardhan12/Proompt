@@ -47,11 +47,11 @@ Smoke-check:
 - Templates tab loads built-in templates
 - Enhance tab validates missing provider key with an actionable error
 
-Unsigned macOS note:
+macOS signing note:
 
-- The DMG is currently unsigned because Developer ID signing/notarization is not set up yet.
-- Gatekeeper may report `Proompt.app` is "damaged" on first launch.
-- If testing an official GitHub Release artifact, remove quarantine once:
+- The release workflow signs/notarizes the DMG only when Apple signing secrets are configured. See `docs/macos-signing.md`.
+- If signing secrets are absent, the workflow publishes an unsigned fallback DMG and emits a warning.
+- Unsigned builds may trigger Gatekeeper's "damaged" warning. If testing an official unsigned GitHub Release artifact, remove quarantine once:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Proompt.app
@@ -96,7 +96,8 @@ The release workflow will:
    - macOS CLI archive
    - Windows CLI archive
    - macOS Apple Silicon desktop `.dmg`
-4. Publish the draft only after all build/upload jobs pass.
+4. Sign/notarize the macOS app when Apple secrets are configured; otherwise publish an unsigned fallback with a warning.
+5. Publish the draft only after all build/upload jobs pass.
 
 ## 6. Verify GitHub Release
 
@@ -104,12 +105,18 @@ The release workflow will:
 gh release view vX.Y.Z --json url,assets --jq '{url, assets:[.assets[].name]}'
 ```
 
-Confirm the release is not a draft and contains all expected assets.
+Confirm the release is not a draft and contains all expected assets. If Apple signing secrets were configured for the release, download the DMG and verify Gatekeeper/stapling locally:
+
+```bash
+codesign --verify --deep --strict --verbose=2 /Applications/Proompt.app
+spctl --assess --type execute --verbose /Applications/Proompt.app
+xcrun stapler validate /Applications/Proompt.app
+```
 
 Release notes should clearly say:
 
 - Desktop DMG is macOS Apple Silicon only for now.
-- Desktop app is unsigned/not notarized.
+- Whether the desktop app is signed/notarized or unsigned/not notarized.
 - If the release includes selected-text replacement, macOS requires Accessibility permission.
 - If the release includes selected-text replacement, Proompt writes a local diagnostics file at `~/Library/Application Support/proompt/selection-diagnostics.json` for troubleshooting capture/replacement issues. Note that it contains metadata/status/error codes, active app/window metadata, and character counts only — not selected text or prompt content — and can be deleted anytime.
 - If macOS says the app is damaged, run:

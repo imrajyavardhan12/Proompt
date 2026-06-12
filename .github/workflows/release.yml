@@ -133,9 +133,109 @@ jobs:
         working-directory: app
         run: bun install --frozen-lockfile
 
+      - name: Validate macOS signing configuration
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          has_cert=false
+          if [[ -n "${APPLE_CERTIFICATE:-}" || -n "${APPLE_CERTIFICATE_PASSWORD:-}" ]]; then
+            has_cert=true
+          fi
+
+          has_api_notary=false
+          if [[ -n "${APPLE_API_KEY:-}" || -n "${APPLE_API_ISSUER:-}" || -n "${APPLE_API_PRIVATE_KEY:-}" ]]; then
+            has_api_notary=true
+          fi
+
+          has_password_notary=false
+          if [[ -n "${APPLE_ID:-}" || -n "${APPLE_PASSWORD:-}" || -n "${APPLE_TEAM_ID:-}" ]]; then
+            has_password_notary=true
+          fi
+
+          if [[ "$has_cert" == false && "$has_api_notary" == false && "$has_password_notary" == false ]]; then
+            echo "PROOMPT_MACOS_SIGNING_MODE=unsigned" >> "$GITHUB_ENV"
+            echo "No Apple signing secrets configured; building unsigned macOS DMG."
+            exit 0
+          fi
+
+          if [[ -z "${APPLE_CERTIFICATE:-}" || -z "${APPLE_CERTIFICATE_PASSWORD:-}" ]]; then
+            echo "APPLE_CERTIFICATE and APPLE_CERTIFICATE_PASSWORD are required for signed macOS releases." >&2
+            exit 1
+          fi
+
+          if [[ "$has_api_notary" == true ]]; then
+            if [[ -z "${APPLE_API_KEY:-}" || -z "${APPLE_API_ISSUER:-}" || -z "${APPLE_API_PRIVATE_KEY:-}" ]]; then
+              echo "APPLE_API_KEY, APPLE_API_ISSUER, and APPLE_API_PRIVATE_KEY must all be set for API-key notarization." >&2
+              exit 1
+            fi
+
+            key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+            printf '%s' "$APPLE_API_PRIVATE_KEY" > "$key_path"
+            chmod 600 "$key_path"
+            echo "APPLE_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+          fi
+
+          if [[ "$has_password_notary" == true ]]; then
+            if [[ -z "${APPLE_ID:-}" || -z "${APPLE_PASSWORD:-}" || -z "${APPLE_TEAM_ID:-}" ]]; then
+              echo "APPLE_ID, APPLE_PASSWORD, and APPLE_TEAM_ID must all be set for Apple ID notarization." >&2
+              exit 1
+            fi
+          fi
+
+          if [[ "$has_api_notary" == false && "$has_password_notary" == false ]]; then
+            echo "Notarization credentials are required for signed macOS releases." >&2
+            echo "Set either APPLE_API_KEY/APPLE_API_ISSUER/APPLE_API_PRIVATE_KEY or APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID." >&2
+            exit 1
+          fi
+
+          echo "PROOMPT_MACOS_SIGNING_MODE=signed-notarized" >> "$GITHUB_ENV"
+          echo "Apple signing and notarization secrets are configured."
+
       - name: Build Tauri app
         working-directory: app
-        run: bunx tauri build
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: bunx tauri build --ci
+
+      - name: Verify signed and notarized app
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${PROOMPT_MACOS_SIGNING_MODE:-}" != "signed-notarized" ]]; then
+            echo "Skipping signing verification for ${PROOMPT_MACOS_SIGNING_MODE:-unknown} macOS build."
+            exit 0
+          fi
+
+          codesign --verify --deep --strict --verbose=2 target/release/bundle/macos/Proompt.app
+          spctl --assess --type execute --verbose target/release/bundle/macos/Proompt.app
+          xcrun stapler validate target/release/bundle/macos/Proompt.app
+          xcrun stapler validate target/release/bundle/dmg/*.dmg
+
+      - name: Report unsigned macOS build
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${PROOMPT_MACOS_SIGNING_MODE:-}" == "unsigned" ]]; then
+            echo "::warning::macOS signing secrets are not configured. Published DMG will remain unsigned/not notarized."
+          fi
 
       - name: Upload desktop release asset
         env:
