@@ -26,3 +26,6 @@ Thumbs.db
 *.exe
 *.AppImage
 *.deb
+
+# Local prompt-quality evaluation output
+/evals/results/

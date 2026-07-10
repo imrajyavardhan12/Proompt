@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "suite": "coding-agent-core",
+  "description": "Core quality cases for Claude Code, Cursor, Codex, and generic coding-agent enhancement.",
+  "cases": [
+    {
+      "id": "simple-typo-fix",
+      "category": "small_fix",
+      "prompt": "fix the typo in the settings button",
+      "platform": "cursor",
+      "complexity": "simple",
+      "expectations": {
+        "preserve": ["Only a settings-button typo needs correction."],
+        "shouldInclude": ["Locate the visible typo", "Make a minimal change", "Verify the corrected label"],
+        "mustAvoid": ["Inventing a file path", "Broad UI refactoring", "A long multi-phase workflow"],
+        "verbosity": "compact"
+      }
+    },
+    {
+      "id": "ambiguous-upload-failure",
+      "category": "bug_fix",
+      "prompt": "fix upload bug",
+      "platform": "claude-code",
+      "complexity": "ambiguous",
+      "expectations": {
+        "preserve": ["Investigate and fix the upload failure without assuming its cause."],
+        "shouldInclude": ["Inspect the repository first", "Determine root cause", "Add regression verification", "State assumptions"],
+        "mustAvoid": ["Inventing upload limits", "Naming nonexistent files", "Prescribing a framework"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "explicit-large-upload-constraint",
+      "category": "bug_fix",
+      "prompt": "uploads over 5MB return 500; fix it without changing the public API",
+      "platform": "codex",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["The failure occurs above 5MB", "The public API must remain unchanged."],
+        "shouldInclude": ["Reproduce the boundary failure", "Trace the 500 response", "Test below, at, and above the boundary"],
+        "mustAvoid": ["Changing API contracts", "Assuming a specific server or storage provider", "Unrelated upload redesign"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "scoped-auth-feature",
+      "category": "feature",
+      "prompt": "add rate limiting to the login endpoint using existing project patterns, no new dependencies",
+      "platform": "claude-code",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["Rate limiting applies to login", "Use existing patterns", "Do not add dependencies."],
+        "shouldInclude": ["Discover the login path and existing middleware", "Define observable limit behavior", "Test allowed and rejected attempts"],
+        "mustAvoid": ["Selecting a new rate-limit package", "Inventing endpoint paths", "Changing authentication behavior beyond rate limiting"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "behavior-preserving-refactor",
+      "category": "refactor",
+      "prompt": "refactor config loading to remove duplication but keep behavior and file format unchanged",
+      "platform": "cursor",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["Remove duplication", "Behavior and persisted file format must not change."],
+        "shouldInclude": ["Identify duplicated paths", "Use a minimal internal abstraction", "Run compatibility tests"],
+        "mustAvoid": ["Config schema migration", "Public API changes", "Unrelated cleanup"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "billing-edge-tests-only",
+      "category": "testing",
+      "prompt": "write tests for billing edge cases; do not modify production behavior",
+      "platform": "codex",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["The task is tests only", "Production behavior must not change."],
+        "shouldInclude": ["Inspect existing billing behavior and test conventions", "Cover boundaries and failure paths", "Report any discovered behavior separately"],
+        "mustAvoid": ["Fixing production code", "Inventing billing rules as facts", "Adding unrelated test infrastructure"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "path-traversal-security",
+      "category": "security",
+      "prompt": "users may be able to read files outside the upload directory; investigate and fix safely",
+      "platform": "claude-code",
+      "complexity": "high_risk",
+      "expectations": {
+        "preserve": ["Investigate possible file reads outside the upload directory", "Implement a safe fix if confirmed."],
+        "shouldInclude": ["Treat paths as untrusted input", "Establish exploitability before editing", "Add traversal and valid-path regression tests", "Avoid exposing sensitive paths"],
+        "mustAvoid": ["Claiming the vulnerability is confirmed", "Inventing route names", "Weak string-prefix validation as the prescribed solution"],
+        "verbosity": "detailed"
+      }
+    },
+    {
+      "id": "n-plus-one-performance",
+      "category": "performance",
+      "prompt": "the dashboard gets slow with many users, check for N+1 queries and fix only if confirmed",
+      "platform": "codex",
+      "complexity": "investigation",
+      "expectations": {
+        "preserve": ["Investigate dashboard slowdown", "Only fix N+1 behavior if evidence confirms it."],
+        "shouldInclude": ["Measure or inspect query behavior", "Establish a baseline", "Verify query count and response behavior after changes"],
+        "mustAvoid": ["Assuming an ORM or database", "Claiming N+1 is the root cause", "Unmeasured caching or broad optimization"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "flaky-test-investigation",
+      "category": "investigation",
+      "prompt": "the checkout integration test flakes in CI but passes locally; diagnose before changing code",
+      "platform": "coding-agent",
+      "complexity": "investigation",
+      "expectations": {
+        "preserve": ["Diagnosis must precede code changes", "The failure differs between CI and local runs."],
+        "shouldInclude": ["Build a reproduction loop", "Compare environment and timing", "Form and test hypotheses", "Add a regression test when a valid seam exists"],
+        "mustAvoid": ["Immediately increasing retries", "Deleting or skipping the test", "Assuming a root cause"],
+        "verbosity": "detailed"
+      }
+    },
+    {
+      "id": "svelte-runes-constraint",
+      "category": "feature",
+      "prompt": "add search to the history screen using Svelte 5 runes and preserve the current IPC contract",
+      "platform": "cursor",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["Use Svelte 5 runes", "Keep the IPC contract unchanged."],
+        "shouldInclude": ["Inspect existing history state and UI conventions", "Filter without backend contract changes", "Verify empty and matching states"],
+        "mustAvoid": ["Legacy Svelte state syntax", "Changing Tauri commands", "Adding a search dependency without need"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "public-api-migration",
+      "category": "migration",
+      "prompt": "replace the deprecated parser internally while keeping the exported API backward compatible",
+      "platform": "coding-agent",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["Replace the deprecated parser internally", "Exported API compatibility is required."],
+        "shouldInclude": ["Identify callers and compatibility tests", "Keep the migration internal", "Verify old call patterns"],
+        "mustAvoid": ["Renaming exported symbols", "Assuming the replacement library", "Unrelated API cleanup"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "already-detailed-task",
+      "category": "calibration",
+      "prompt": "In the existing CSV export flow, preserve column order, add UTF-8 BOM only for Excel downloads, keep API downloads unchanged, and add tests for both paths. Do not add dependencies.",
+      "platform": "claude-code",
+      "complexity": "already_detailed",
+      "expectations": {
+        "preserve": ["Column order stays unchanged", "BOM applies only to Excel downloads", "API downloads stay unchanged", "No dependencies."],
+        "shouldInclude": ["Discover how Excel and API paths are distinguished", "Test both paths", "Keep the implementation scoped"],
+        "mustAvoid": ["Expanding the feature", "Changing CSV columns", "Repeating the same constraints excessively"],
+        "verbosity": "compact"
+      }
+    }
+  ]
+}

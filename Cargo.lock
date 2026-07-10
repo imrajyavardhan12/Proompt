@@ -3281,6 +3281,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "proompt-evals"
+version = "0.3.4"
+dependencies = [
+ "anyhow",
+ "clap",
+ "proompt-core",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "pxfm"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
