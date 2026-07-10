@@ -63,6 +63,7 @@ impl OpenAICompatibleClient {
         let body = OpenAIRequest {
             model: self.model.clone(),
             max_tokens: Some(request.max_tokens),
+            temperature: compatible_temperature(&self.model, request.temperature),
             stream: false,
             messages: vec![
                 OpenAIMessage {
@@ -122,6 +123,7 @@ impl OpenAICompatibleClient {
         let body = OpenAIRequest {
             model: self.model.clone(),
             max_tokens: Some(request.max_tokens),
+            temperature: compatible_temperature(&self.model, request.temperature),
             stream: true,
             messages: vec![
                 OpenAIMessage {
@@ -202,11 +204,29 @@ impl OpenAICompatibleClient {
     }
 }
 
+fn compatible_temperature(model: &str, temperature: Option<f32>) -> Option<f32> {
+    let model_name = model
+        .rsplit('/')
+        .next()
+        .unwrap_or(model)
+        .to_ascii_lowercase();
+    if ["o1", "o3", "o4"]
+        .iter()
+        .any(|prefix| model_name.starts_with(prefix))
+    {
+        None
+    } else {
+        temperature
+    }
+}
+
 #[derive(Debug, Serialize)]
 struct OpenAIRequest {
     model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
     stream: bool,
     messages: Vec<OpenAIMessage>,
 }
@@ -253,4 +273,21 @@ struct StreamChoice {
 #[derive(Debug, Deserialize)]
 struct StreamDelta {
     content: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn temperature_is_omitted_for_incompatible_reasoning_models() {
+        assert_eq!(compatible_temperature("o1", Some(0.2)), None);
+        assert_eq!(compatible_temperature("o3-mini", Some(0.2)), None);
+        assert_eq!(compatible_temperature("openai/o4-mini", Some(0.2)), None);
+        assert_eq!(compatible_temperature("gpt-4o-mini", Some(0.2)), Some(0.2));
+        assert_eq!(
+            compatible_temperature("openai/gpt-4o-mini", Some(0.2)),
+            Some(0.2)
+        );
+    }
 }

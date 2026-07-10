@@ -9,6 +9,8 @@ pub struct LlmRequest {
     pub system_prompt: String,
     pub user_prompt: String,
     pub max_tokens: u32,
+    /// Optional sampling temperature. Providers may omit it for incompatible models.
+    pub temperature: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

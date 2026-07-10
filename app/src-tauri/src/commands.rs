@@ -1627,6 +1627,7 @@ pub async fn test_api_connection(
         system_prompt: "Respond with only: OK".to_string(),
         user_prompt: "Test".to_string(),
         max_tokens: 10,
+        temperature: None,
     };
 
     let result = match provider.as_str() {

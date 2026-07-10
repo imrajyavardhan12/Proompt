@@ -40,6 +40,7 @@ impl GoogleClient {
             }],
             generation_config: Some(GenerationConfig {
                 max_output_tokens: Some(request.max_tokens),
+                temperature: request.temperature,
             }),
         };
 
@@ -108,6 +109,8 @@ struct GeminiPart {
 struct GenerationConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     max_output_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
 }
 
 #[derive(Debug, Deserialize)]

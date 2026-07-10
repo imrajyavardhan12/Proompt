@@ -26,6 +26,7 @@ impl AnthropicClient {
         let body = AnthropicRequest {
             model: self.model.clone(),
             max_tokens: request.max_tokens,
+            temperature: request.temperature,
             system: Some(request.system_prompt),
             messages: vec![AnthropicMessage {
                 role: "user".to_string(),
@@ -80,6 +81,8 @@ impl AnthropicClient {
 struct AnthropicRequest {
     model: String,
     max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     system: Option<String>,
     messages: Vec<AnthropicMessage>,

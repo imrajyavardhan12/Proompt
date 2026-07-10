@@ -9,6 +9,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::platform::{EnhanceType, Platform};
 
+fn sampling_temperature(platform: Platform) -> Option<f32> {
+    matches!(
+        platform,
+        Platform::ClaudeCode | Platform::Cursor | Platform::Codex | Platform::CodingAgent
+    )
+    .then_some(0.2)
+}
+
 fn build_changes_summary(
     original: &str,
     enhanced: &str,
@@ -115,6 +123,7 @@ pub async fn enhance(
         system_prompt,
         user_prompt,
         max_tokens: request.options.max_tokens.unwrap_or(2048),
+        temperature: sampling_temperature(request.platform),
     };
 
     let provider = crate::config::normalize_provider(provider)
@@ -194,6 +203,7 @@ pub async fn enhance_stream(
         system_prompt,
         user_prompt,
         max_tokens: request.options.max_tokens.unwrap_or(2048),
+        temperature: sampling_temperature(request.platform),
     };
 
     let provider = crate::config::normalize_provider(provider)
@@ -245,6 +255,16 @@ pub async fn enhance_stream(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn coding_agent_sampling_is_low_variance_without_affecting_other_targets() {
+        assert_eq!(sampling_temperature(Platform::ClaudeCode), Some(0.2));
+        assert_eq!(sampling_temperature(Platform::Cursor), Some(0.2));
+        assert_eq!(sampling_temperature(Platform::Codex), Some(0.2));
+        assert_eq!(sampling_temperature(Platform::CodingAgent), Some(0.2));
+        assert_eq!(sampling_temperature(Platform::Claude), None);
+        assert_eq!(sampling_temperature(Platform::Midjourney), None);
+    }
 
     #[tokio::test]
     async fn enhance_rejects_unknown_provider_before_network_call() {
