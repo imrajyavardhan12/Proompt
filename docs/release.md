@@ -31,13 +31,15 @@ bun install --frozen-lockfile
 bun run build
 ```
 
-Optional desktop smoke test:
+Optional unsigned desktop smoke build:
 
 ```bash
 cd app
-bunx tauri build
+CI=true bunx tauri build --ci --no-sign
 open ../target/release/bundle/macos/Proompt.app
 ```
+
+Setting `CI=true` keeps local release validation on the same non-interactive DMG packaging path as GitHub Actions and avoids flaky Finder-held temporary images.
 
 Smoke-check:
 

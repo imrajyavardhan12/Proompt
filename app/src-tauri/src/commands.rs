@@ -87,6 +87,13 @@ impl QuickEnhanceInputSource {
             QuickEnhanceInputSource::Clipboard => "clipboard prompt",
         }
     }
+
+    fn diagnostic_label(&self) -> &'static str {
+        match self {
+            QuickEnhanceInputSource::SelectedText => "selected_text",
+            QuickEnhanceInputSource::Clipboard => "clipboard",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,12 +102,22 @@ enum QuickEnhanceDelivery {
     CopiedToClipboard,
 }
 
+impl QuickEnhanceDelivery {
+    fn diagnostic_label(&self) -> &'static str {
+        match self {
+            QuickEnhanceDelivery::ReplacedSelection => "replaced_selection",
+            QuickEnhanceDelivery::CopiedToClipboard => "copied_to_clipboard",
+        }
+    }
+}
+
 #[derive(Debug)]
 struct QuickEnhanceInput {
     prompt: String,
     source: QuickEnhanceInputSource,
     original_clipboard: Option<String>,
     accessibility_untrusted: bool,
+    diagnostics: SelectionCaptureDiagnostics,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -110,6 +127,11 @@ pub struct SelectionCaptureDiagnostics {
     selected_text_enabled: bool,
     outcome: String,
     steps: Vec<String>,
+    input_source: Option<String>,
+    resolution: Option<TargetResolution>,
+    delivery: Option<String>,
+    delivery_note: Option<String>,
+    error: Option<String>,
 }
 
 impl SelectionCaptureDiagnostics {
@@ -119,6 +141,11 @@ impl SelectionCaptureDiagnostics {
             selected_text_enabled,
             outcome: "not_started".to_string(),
             steps: Vec::new(),
+            input_source: None,
+            resolution: None,
+            delivery: None,
+            delivery_note: None,
+            error: None,
         }
     }
 
@@ -161,6 +188,24 @@ pub struct QuickEnhanceRouteInspection {
     pub environment: Option<EnvironmentSnapshot>,
     pub resolution: Option<TargetResolution>,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardSelfCheck {
+    pub readable: bool,
+    pub writable: bool,
+    pub restored: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickEnhanceSelfCheck {
+    pub accessibility: AccessibilityStatus,
+    pub clipboard: ClipboardSelfCheck,
+    pub provider: ProviderSetupStatus,
+    pub route: QuickEnhanceRouteInspection,
 }
 
 pub fn register_quick_enhance_shortcut(app: &AppHandle) {
@@ -264,13 +309,14 @@ async fn quick_enhance_from_available_input(
     let _in_flight = QuickEnhanceInFlightGuard::try_acquire()?;
     let config = cfg::load_config()?;
     let environment = collect_environment_snapshot();
-    let captured = capture_quick_enhance_input(&app, &config).await?;
+    let mut captured = capture_quick_enhance_input(&app, &config).await?;
+    captured.diagnostics.input_source = Some(captured.source.diagnostic_label().to_string());
 
     if notify_progress {
         let progress = if captured.source == QuickEnhanceInputSource::Clipboard
             && captured.accessibility_untrusted
         {
-            "Selected text needs Accessibility permission (Settings > Selected-text diagnostics). Enhancing clipboard prompt instead...".to_string()
+            "Accessibility is not trusted, so selected text cannot be read. Enhancing clipboard prompt instead...".to_string()
         } else if captured.source == QuickEnhanceInputSource::Clipboard
             && config.quick_enhance.selected_text_enabled
         {
@@ -281,14 +327,23 @@ async fn quick_enhance_from_available_input(
         notify(&app, "Proompt", &progress);
     }
 
-    let resolved = resolve_quick_enhance_input_with_environment(
+    let resolved = match resolve_quick_enhance_input_with_environment(
         &config,
         &captured.prompt,
         environment.as_ref(),
-    )?;
+    ) {
+        Ok(resolved) => resolved,
+        Err(e) => {
+            captured.diagnostics.error = Some(diagnostic_quick_enhance_error(&e.to_string()));
+            write_selection_capture_diagnostics(&captured.diagnostics);
+            return Err(e);
+        }
+    };
     let original_prompt = resolved.prompt.clone();
     let resolution = resolved.resolution.clone();
-    let result = enhance_with_loaded_config(
+    captured.diagnostics.resolution = Some(resolution.clone());
+
+    let result = match enhance_with_loaded_config(
         ConfiguredEnhanceRequest {
             prompt: resolved.prompt,
             platform: Some(resolution.platform.to_string()),
@@ -299,12 +354,32 @@ async fn quick_enhance_from_available_input(
         },
         config,
     )
-    .await?;
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            captured.diagnostics.error = Some(diagnostic_quick_enhance_error(&e.to_string()));
+            write_selection_capture_diagnostics(&captured.diagnostics);
+            return Err(e);
+        }
+    };
 
     let enhanced_prompt = result.response.enhanced_prompt.clone();
     let (delivery, delivery_note) =
-        deliver_quick_enhance_output(&app, &enhanced_prompt, &captured, environment.as_ref())
-            .await?;
+        match deliver_quick_enhance_output(&app, &enhanced_prompt, &captured, environment.as_ref())
+            .await
+        {
+            Ok(delivery) => delivery,
+            Err(e) => {
+                captured.diagnostics.error = Some(diagnostic_quick_enhance_error(&e.to_string()));
+                write_selection_capture_diagnostics(&captured.diagnostics);
+                return Err(e);
+            }
+        };
+    captured.diagnostics.delivery = Some(delivery.diagnostic_label().to_string());
+    captured.diagnostics.delivery_note = delivery_note.map(str::to_string);
+    write_selection_capture_diagnostics(&captured.diagnostics);
+
     record_prompt_history_if_enabled(NewPromptHistoryRecord {
         original_prompt,
         enhanced_prompt: enhanced_prompt.clone(),
@@ -367,6 +442,7 @@ async fn capture_quick_enhance_input(
                 source: QuickEnhanceInputSource::SelectedText,
                 original_clipboard,
                 accessibility_untrusted,
+                diagnostics,
             });
         }
 
@@ -388,6 +464,7 @@ async fn capture_quick_enhance_input(
                     source: QuickEnhanceInputSource::SelectedText,
                     original_clipboard,
                     accessibility_untrusted,
+                    diagnostics,
                 });
             }
         } else {
@@ -416,6 +493,7 @@ async fn capture_quick_enhance_input(
         source: QuickEnhanceInputSource::Clipboard,
         original_clipboard,
         accessibility_untrusted,
+        diagnostics,
     })
 }
 
@@ -1002,6 +1080,12 @@ fn selection_clipboard_sentinel() -> String {
 
 #[tauri::command]
 pub fn inspect_quick_enhance_route(app: AppHandle) -> Result<QuickEnhanceRouteInspection, String> {
+    inspect_quick_enhance_route_from_clipboard(&app)
+}
+
+fn inspect_quick_enhance_route_from_clipboard(
+    app: &AppHandle,
+) -> Result<QuickEnhanceRouteInspection, String> {
     let config = cfg::load_config().map_err(|e| e.to_string())?;
     let environment = collect_environment_snapshot();
     let prompt = match app.clipboard().read_text() {
@@ -1041,6 +1125,80 @@ pub fn inspect_quick_enhance_route(app: AppHandle) -> Result<QuickEnhanceRouteIn
             error: Some(e.to_string()),
         }),
     }
+}
+
+#[tauri::command]
+pub fn run_quick_enhance_self_check(app: AppHandle) -> Result<QuickEnhanceSelfCheck, String> {
+    Ok(QuickEnhanceSelfCheck {
+        accessibility: get_accessibility_status()?,
+        clipboard: check_text_clipboard_roundtrip(&app),
+        provider: get_provider_setup_status()?,
+        route: inspect_quick_enhance_route_from_clipboard(&app)?,
+    })
+}
+
+fn check_text_clipboard_roundtrip(app: &AppHandle) -> ClipboardSelfCheck {
+    let original = match app.clipboard().read_text() {
+        Ok(original) => original,
+        Err(e) => {
+            return ClipboardSelfCheck {
+                readable: false,
+                writable: false,
+                restored: false,
+                message: format!(
+                    "Text clipboard is not readable; skipped write check to avoid replacing non-text clipboard contents: {}",
+                    e
+                ),
+            };
+        }
+    };
+
+    let sentinel = quick_enhance_self_check_sentinel();
+    if let Err(e) = app.clipboard().write_text(&sentinel) {
+        return ClipboardSelfCheck {
+            readable: true,
+            writable: false,
+            restored: false,
+            message: format!("Clipboard write failed: {}", e),
+        };
+    }
+
+    let writable = app
+        .clipboard()
+        .read_text()
+        .map(|current| current == sentinel)
+        .unwrap_or(false);
+    let restored = app.clipboard().write_text(original).is_ok();
+    let message = match (writable, restored) {
+        (true, true) => {
+            "Clipboard read/write check passed and original text was restored.".to_string()
+        }
+        (true, false) => {
+            "Clipboard write check passed, but original text could not be restored.".to_string()
+        }
+        (false, true) => {
+            "Clipboard write check could not verify the sentinel, but original text was restored."
+                .to_string()
+        }
+        (false, false) => {
+            "Clipboard write check failed and original text could not be restored.".to_string()
+        }
+    };
+
+    ClipboardSelfCheck {
+        readable: true,
+        writable,
+        restored,
+        message,
+    }
+}
+
+fn quick_enhance_self_check_sentinel() -> String {
+    format!(
+        "__PROOMPT_QUICK_ENHANCE_SELF_CHECK_{}_{}__",
+        std::process::id(),
+        now_ms()
+    )
 }
 
 fn collect_environment_snapshot() -> Option<EnvironmentSnapshot> {
@@ -1236,6 +1394,26 @@ fn friendly_quick_enhance_error(message: &str) -> String {
         "Hosted mode is coming soon. Switch to BYOK mode in Settings.".to_string()
     } else {
         message.to_string()
+    }
+}
+
+fn diagnostic_quick_enhance_error(message: &str) -> String {
+    let lower = message.to_lowercase();
+    if lower.contains("quick enhance is already running") {
+        "quick_enhance_in_flight".to_string()
+    } else if lower.contains("api key not configured")
+        || lower.contains("failed to get api key")
+        || lower.contains("api key not found")
+    {
+        "provider_api_key_missing".to_string()
+    } else if lower.contains("hosted mode") {
+        "hosted_mode_unavailable".to_string()
+    } else if lower.contains("api error") || lower.contains("provider error") {
+        "provider_request_failed".to_string()
+    } else if lower.contains("network") || lower.contains("failed to send request") {
+        "network_request_failed".to_string()
+    } else {
+        "quick_enhance_failed".to_string()
     }
 }
 
@@ -1533,5 +1711,76 @@ mod tests {
             Some("Editor — project"),
             None
         ));
+    }
+
+    #[test]
+    fn legacy_selection_diagnostics_load_with_enriched_fields_empty() {
+        let diagnostics: SelectionCaptureDiagnostics = serde_json::from_str(
+            r#"{
+                "timestampMs": 123,
+                "selectedTextEnabled": true,
+                "outcome": "clipboard_fallback:12 chars",
+                "steps": ["AX trusted: false"]
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(diagnostics.timestamp_ms, 123);
+        assert_eq!(diagnostics.input_source, None);
+        assert_eq!(diagnostics.resolution, None);
+        assert_eq!(diagnostics.delivery, None);
+        assert_eq!(diagnostics.delivery_note, None);
+        assert_eq!(diagnostics.error, None);
+    }
+
+    #[test]
+    fn enriched_selection_diagnostics_use_stable_camel_case_fields() {
+        let mut diagnostics = SelectionCaptureDiagnostics::new(true);
+        diagnostics.input_source = Some("selected_text".to_string());
+        diagnostics.resolution = Some(TargetResolution {
+            platform: Platform::ClaudeCode,
+            source: proompt_core::routing::ResolutionSource::ExplicitPrefix,
+            confidence: proompt_core::routing::ResolutionConfidence::Explicit,
+            reason: "via /cc".to_string(),
+        });
+        diagnostics.delivery = Some("copied_to_clipboard".to_string());
+        diagnostics.delivery_note = Some("the focused app or window changed".to_string());
+        diagnostics.error = Some("provider_request_failed".to_string());
+
+        let value = serde_json::to_value(diagnostics).unwrap();
+
+        assert_eq!(value["inputSource"], "selected_text");
+        assert_eq!(value["resolution"]["platform"], "claude-code");
+        assert_eq!(value["resolution"]["source"], "explicit_prefix");
+        assert_eq!(value["delivery"], "copied_to_clipboard");
+        assert_eq!(value["deliveryNote"], "the focused app or window changed");
+        assert_eq!(value["error"], "provider_request_failed");
+        assert!(value.get("prompt").is_none());
+        assert!(value.get("selectedText").is_none());
+    }
+
+    #[test]
+    fn quick_enhance_errors_are_reduced_to_safe_diagnostic_codes() {
+        let cases = [
+            (
+                "Quick Enhance is already running",
+                "quick_enhance_in_flight",
+            ),
+            (
+                "API key not configured for openai",
+                "provider_api_key_missing",
+            ),
+            ("Hosted mode not yet implemented", "hosted_mode_unavailable"),
+            (
+                "OpenAI API error (401): sensitive provider response",
+                "provider_request_failed",
+            ),
+            ("Failed to send request to OpenAI", "network_request_failed"),
+            ("unexpected internal detail", "quick_enhance_failed"),
+        ];
+
+        for (message, expected) in cases {
+            assert_eq!(diagnostic_quick_enhance_error(message), expected);
+        }
     }
 }

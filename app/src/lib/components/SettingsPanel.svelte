@@ -25,7 +25,40 @@
       selectedTextEnabled: boolean;
       outcome: string;
       steps: string[];
+      inputSource?: string | null;
+      resolution?: {
+        platform: string;
+        source: string;
+        confidence: string;
+        reason: string;
+      } | null;
+      delivery?: string | null;
+      deliveryNote?: string | null;
+      error?: string | null;
     } | null;
+  }
+
+  interface ClipboardSelfCheck {
+    readable: boolean;
+    writable: boolean;
+    restored: boolean;
+    message: string;
+  }
+
+  interface QuickEnhanceSelfCheck {
+    accessibility: AccessibilityStatus;
+    clipboard: ClipboardSelfCheck;
+    provider: {
+      mode: string;
+      provider: string;
+      model: string;
+      api_key_configured: boolean;
+      api_key_status: string;
+      api_key_error?: string | null;
+      env_var: string;
+      cli_command: string;
+    };
+    route: QuickEnhanceRouteInspection;
   }
 
   let mode = $state("byok");
@@ -47,6 +80,8 @@
   let axStatus = $state<AccessibilityStatus | null>(null);
   let axLoading = $state(false);
   let axStepsExpanded = $state(false);
+  let selfCheck = $state<QuickEnhanceSelfCheck | null>(null);
+  let selfChecking = $state(false);
   let testingConnection = $state(false);
   let saving = $state(false);
 
@@ -155,6 +190,19 @@
     }
   }
 
+  async function runSelfCheck() {
+    selfChecking = true;
+    try {
+      selfCheck = await invoke<QuickEnhanceSelfCheck>("run_quick_enhance_self_check");
+      axStatus = selfCheck.accessibility;
+      showStatus("success", "Quick Enhance self-check complete");
+    } catch (e: any) {
+      showStatus("error", `${e}`);
+    } finally {
+      selfChecking = false;
+    }
+  }
+
   function captureOutcomeLabel(outcome: string) {
     const [kind, detail] = outcome.split(":", 2);
     const chars = detail?.trim() ? ` (${detail.trim()})` : "";
@@ -170,6 +218,46 @@
 
   function captureOutcomeIsFallback(outcome: string) {
     return outcome.startsWith("clipboard_fallback") || outcome.startsWith("empty_input");
+  }
+
+  function inputSourceLabel(source?: string | null) {
+    const labels: Record<string, string> = {
+      selected_text: "Selected text",
+      clipboard: "Clipboard",
+    };
+    return source ? (labels[source] ?? source) : "Unknown";
+  }
+
+  function deliveryLabel(delivery?: string | null) {
+    const labels: Record<string, string> = {
+      replaced_selection: "Replaced selection",
+      copied_to_clipboard: "Copied to clipboard",
+    };
+    return delivery ? (labels[delivery] ?? delivery) : "Not completed";
+  }
+
+  function providerReadinessLabel(check?: QuickEnhanceSelfCheck | null) {
+    if (!check) return "Not checked";
+    if (check.provider.mode === "hosted") return "Hosted unavailable";
+    if (check.provider.api_key_configured) return "Ready";
+    if (check.provider.api_key_status === "deferred") return "Keychain deferred";
+    return "Needs key";
+  }
+
+  function statusOk(value: boolean | null | undefined) {
+    return value === true;
+  }
+
+  function diagnosticErrorLabel(error?: string | null) {
+    const labels: Record<string, string> = {
+      quick_enhance_in_flight: "Quick Enhance was already running.",
+      provider_api_key_missing: "Provider API key is missing.",
+      hosted_mode_unavailable: "Hosted mode is not available yet.",
+      provider_request_failed: "Provider request failed. Check the selected provider, model, or key.",
+      network_request_failed: "Network request failed.",
+      quick_enhance_failed: "Quick Enhance failed.",
+    };
+    return error ? (labels[error] ?? error) : "";
   }
 
   function relativeTime(timestampMs: number) {
@@ -495,12 +583,17 @@
     <div class="diagnostic-card">
       <div class="diagnostic-top">
         <div>
-          <span class="diagnostic-title">Selected-text diagnostics</span>
-          <p class="hint" style="margin: 2px 0 0">Accessibility permission state and the last capture attempt.</p>
+          <span class="diagnostic-title">Quick Enhance diagnostics</span>
+          <p class="hint" style="margin: 2px 0 0">Accessibility permission state, capture path, route, and delivery for the last attempt.</p>
         </div>
-        <button class="btn-secondary" onclick={loadAccessibilityStatus} disabled={axLoading}>
-          {axLoading ? "Checking..." : "Refresh"}
-        </button>
+        <div class="diagnostic-actions">
+          <button class="btn-secondary" onclick={runSelfCheck} disabled={selfChecking}>
+            {selfChecking ? "Checking..." : "Run self-check"}
+          </button>
+          <button class="btn-secondary" onclick={loadAccessibilityStatus} disabled={axLoading}>
+            {axLoading ? "Checking..." : "Refresh"}
+          </button>
+        </div>
       </div>
 
       {#if axStatus}
@@ -545,14 +638,76 @@
             </p>
           {/if}
 
+          {#if selfCheck}
+            <div class="diagnostic-result">
+              <span>Self-check</span>
+              <strong>{selfCheck.clipboard.writable && selfCheck.clipboard.restored ? "Clipboard OK" : "Clipboard needs attention"}</strong>
+              <small>{selfCheck.clipboard.message}</small>
+            </div>
+
+            <div class="diagnostic-grid">
+              <div>
+                <span>Accessibility</span>
+                <strong>{statusOk(selfCheck.accessibility.accessibilityTrusted) ? "Trusted" : "Not trusted"}</strong>
+              </div>
+              <div>
+                <span>Provider</span>
+                <strong>{providerReadinessLabel(selfCheck)}</strong>
+              </div>
+              <div>
+                <span>Route preview</span>
+                <strong>{selfCheck.route.resolution ? platformLabel(selfCheck.route.resolution.platform) : "Unavailable"}</strong>
+              </div>
+            </div>
+
+            {#if selfCheck.provider.api_key_error}
+              <p class="hint">Provider: {selfCheck.provider.api_key_error}</p>
+            {/if}
+            {#if selfCheck.route.error}
+              <div class="diagnostic-error warning">Route preview: {selfCheck.route.error}</div>
+            {/if}
+          {/if}
+
           {#if axStatus.lastCapture && axStatus.lastCapture.outcome !== "not_started"}
             <div class="diagnostic-row">
-              <span>Last capture · {relativeTime(axStatus.lastCapture.timestampMs)}</span>
+              <span>Last attempt · {relativeTime(axStatus.lastCapture.timestampMs)}</span>
               <strong
                 class="ax-outcome"
                 class:fallback={captureOutcomeIsFallback(axStatus.lastCapture.outcome)}
               >{captureOutcomeLabel(axStatus.lastCapture.outcome)}</strong>
             </div>
+
+            <div class="diagnostic-grid">
+              <div>
+                <span>Input</span>
+                <strong>{inputSourceLabel(axStatus.lastCapture.inputSource)}</strong>
+              </div>
+              <div>
+                <span>Delivery</span>
+                <strong>{deliveryLabel(axStatus.lastCapture.delivery)}</strong>
+              </div>
+              <div>
+                <span>Target</span>
+                <strong>{axStatus.lastCapture.resolution ? platformLabel(axStatus.lastCapture.resolution.platform) : "Not resolved"}</strong>
+              </div>
+            </div>
+
+            {#if axStatus.lastCapture.resolution}
+              <div class="diagnostic-result">
+                <span>Route</span>
+                <strong>{platformLabel(axStatus.lastCapture.resolution.platform)}</strong>
+                <small>{routingSourceLabel(axStatus.lastCapture.resolution.source)} · {routingConfidenceLabel(axStatus.lastCapture.resolution.confidence)} · {axStatus.lastCapture.resolution.reason}</small>
+              </div>
+            {/if}
+
+            {#if axStatus.lastCapture.deliveryNote}
+              <div class="diagnostic-error warning">Replacement fallback: {axStatus.lastCapture.deliveryNote}</div>
+            {/if}
+
+            {#if axStatus.lastCapture.error}
+              <div class="diagnostic-error">{diagnosticErrorLabel(axStatus.lastCapture.error)}</div>
+            {/if}
+
             {#if axStatus.lastCapture.steps.length > 0}
               <button class="ax-steps-toggle" onclick={() => (axStepsExpanded = !axStepsExpanded)}>
                 {axStepsExpanded ? "Hide capture steps" : `Show capture steps (${axStatus.lastCapture.steps.length})`}
@@ -959,6 +1114,12 @@
     gap: 12px;
   }
 
+  .diagnostic-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
   .diagnostic-title {
     font-size: 13px;
     font-weight: 600;
@@ -972,6 +1133,12 @@
     color: #d08c8c;
     border-radius: 8px;
     font-size: 11.5px;
+  }
+
+  .diagnostic-error.warning {
+    background: rgba(196, 164, 107, 0.10);
+    border-color: rgba(196, 164, 107, 0.20);
+    color: #c4a46b;
   }
 
   .diagnostic-result {

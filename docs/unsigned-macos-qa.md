@@ -26,7 +26,7 @@ For each host app:
 2. Press Quick Enhance hotkey (`Cmd/Ctrl+Shift+E`).
 3. Confirm Proompt enhances selected text.
 4. Confirm result replaces the selection when safe, otherwise is copied to clipboard with a clear notification.
-5. Check Settings → Selected-text diagnostics if capture falls back.
+5. Check Settings → Quick Enhance diagnostics if capture falls back.
 
 | Host app | Expected result | Notes |
 | --- | --- | --- |
@@ -45,6 +45,7 @@ Diagnostics live at:
 Verify the file contains only:
 
 - capture status/outcome
+- Quick Enhance input source, route, delivery status, and replacement fallback reason
 - error/status codes
 - active app/window metadata
 - character counts
@@ -56,7 +57,8 @@ It must not contain selected text or prompt content.
 
 Before shipping an unsigned release that touches Quick Enhance selected-text behavior:
 
-- Settings opens and shows Selected-text diagnostics.
+- Settings opens and shows Quick Enhance diagnostics.
+- Quick Enhance self-check reports Accessibility, clipboard round-trip, provider readiness, and route preview.
 - Accessibility trusted/untrusted state is accurate.
 - Open System Settings works on macOS.
 - Reset command is copyable from Settings.
