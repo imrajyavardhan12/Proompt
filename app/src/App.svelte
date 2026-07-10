@@ -70,9 +70,9 @@
         aria-label="Settings"
         title="Settings"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.09a2 2 0 0 1 1 1.74v.5a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
           <circle cx="12" cy="12" r="3"/>
-          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
         </svg>
       </button>
     </nav>
@@ -133,11 +133,26 @@
   :global(::-webkit-scrollbar-thumb:hover) { background: #5f5f5f; }
 
   .app-shell {
+    position: relative;
+    isolation: isolate;
     display: flex;
     flex-direction: column;
     width: 100vw;
     height: 100vh;
-    background: #0e0f11;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 18% 8%, rgba(116, 137, 170, 0.11), transparent 34%),
+      radial-gradient(circle at 82% 30%, rgba(118, 104, 151, 0.08), transparent 36%),
+      #0d0e10;
+  }
+
+  .app-shell::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.025), transparent 42%);
   }
 
   .topbar {
@@ -145,10 +160,14 @@
     height: 62px;
     min-height: 62px;
     padding: 0 24px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.075);
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
+    background: rgba(18, 19, 22, 0.68);
+    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(24px) saturate(145%);
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
     -webkit-app-region: drag;
     user-select: none;
   }
@@ -176,11 +195,12 @@
   .brand-mark {
     width: 29px;
     height: 29px;
-    border: 1px solid #393b40;
+    border: 1px solid rgba(255, 255, 255, 0.13);
     border-radius: 8px;
     display: grid;
     place-items: center;
-    background: #1d1f23;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.045));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 14px rgba(0, 0, 0, 0.18);
     color: #e7e5e4;
   }
 
@@ -227,28 +247,39 @@
 
   .settings-button {
     width: 36px;
-    height: 34px;
+    height: 36px;
+    border-color: rgba(255, 255, 255, 0.09);
+    border-radius: 10px;
     display: grid;
     place-items: center;
+    background: rgba(255, 255, 255, 0.045);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    color: #a9abb0;
   }
 
   .nav-button:hover,
   .settings-button:hover,
   .nav-button.active,
   .settings-button.active {
-    border-color: #2d2f34;
-    background: #1b1d21;
-    color: #ecebea;
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    color: #f2f1ee;
   }
 
   .main {
     flex: 1;
     overflow-y: auto;
-    background: #111214;
+    background:
+      radial-gradient(circle at 50% 6%, rgba(83, 94, 115, 0.1), transparent 40%),
+      rgba(14, 15, 17, 0.58);
   }
 
   .main.focus {
-    background: radial-gradient(circle at 50% 20%, #1a1c20 0, #111214 42%, #0e0f11 100%);
+    background:
+      radial-gradient(circle at 50% 16%, rgba(104, 118, 144, 0.16), transparent 38%),
+      radial-gradient(circle at 78% 58%, rgba(105, 88, 128, 0.07), transparent 38%),
+      rgba(14, 15, 17, 0.48);
   }
 
   .main-inner {

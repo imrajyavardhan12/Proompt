@@ -484,13 +484,30 @@
   .setup-alert button,
   .error-alert button { flex-shrink: 0; padding: 6px 9px; border: 1px solid #464137; border-radius: 7px; background: transparent; color: #d1bea0; cursor: pointer; font-size: 10.5px; }
 
-  .composer { border: 1px solid #36383e; border-radius: 14px; overflow: hidden; background: rgba(23, 24, 29, 0.94); box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28); transition: border-color 0.15s ease; }
-  .composer:focus-within { border-color: #55575d; }
-  .composer-top { height: 42px; padding: 0 11px 0 13px; border-bottom: 1px solid #292b30; display: flex; align-items: center; justify-content: space-between; }
+  .composer {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 16px;
+    overflow: hidden;
+    background: linear-gradient(145deg, rgba(39, 41, 48, 0.7), rgba(20, 21, 25, 0.62));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      0 24px 70px rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(28px) saturate(135%);
+    -webkit-backdrop-filter: blur(28px) saturate(135%);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .composer:focus-within {
+    border-color: rgba(255, 255, 255, 0.24);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.09),
+      0 28px 78px rgba(0, 0, 0, 0.36),
+      0 0 0 1px rgba(151, 165, 190, 0.05);
+  }
+  .composer-top { height: 42px; padding: 0 11px 0 13px; border-bottom: 1px solid rgba(255, 255, 255, 0.075); display: flex; align-items: center; justify-content: space-between; }
 
-  .mode-switch { padding: 2px; border-radius: 7px; display: flex; gap: 2px; background: #202126; }
-  .mode-switch button { padding: 5px 9px; border: 0; border-radius: 5px; background: transparent; color: #6f7279; cursor: pointer; font-size: 10.5px; font-weight: 600; }
-  .mode-switch button.active { background: #34363c; color: #ecebea; }
+  .mode-switch { padding: 2px; border: 1px solid rgba(255, 255, 255, 0.055); border-radius: 8px; display: flex; gap: 2px; background: rgba(8, 9, 11, 0.25); }
+  .mode-switch button { padding: 5px 9px; border: 0; border-radius: 6px; background: transparent; color: #777a82; cursor: pointer; font-size: 10.5px; font-weight: 600; }
+  .mode-switch button.active { background: rgba(255, 255, 255, 0.12); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 4px rgba(0, 0, 0, 0.18); color: #f2f1ee; }
 
   .template-button { display: flex; align-items: center; gap: 6px; padding: 6px 7px; border: 0; background: transparent; color: #777a80; cursor: pointer; font-size: 10.5px; }
   .template-button:hover { color: #c6c4c0; }
@@ -504,7 +521,7 @@
   .style-row button { padding: 4px 7px; border: 1px solid #303238; border-radius: 5px; background: transparent; color: #73767d; cursor: pointer; font-size: 9.5px; }
   .style-row button.active { border-color: #5b5d62; background: #303238; color: #e4e2de; }
 
-  .composer-controls { min-height: 54px; padding: 9px 10px; border-top: 1px solid #2c2e34; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .composer-controls { min-height: 54px; padding: 9px 10px; border-top: 1px solid rgba(255, 255, 255, 0.075); display: flex; align-items: center; justify-content: space-between; gap: 10px; background: rgba(8, 9, 11, 0.12); }
   .control-group { min-width: 0; display: flex; align-items: center; gap: 6px; }
 
   .target-select { position: relative; max-width: 230px; padding: 5px 8px; border-radius: 7px; display: flex; align-items: center; gap: 7px; color: #6f7279; cursor: pointer; }
@@ -520,8 +537,8 @@
   .memory-toggle input { position: absolute; opacity: 0; pointer-events: none; }
   .char-count { color: #51545a; font-size: 9px; font-variant-numeric: tabular-nums; }
 
-  .enhance-button { min-width: 116px; padding: 9px 14px; border: 0; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 7px; background: #e4e1dc; color: #171719; cursor: pointer; font-size: 11.5px; font-weight: 700; transition: 0.12s ease; }
-  .enhance-button:hover:not(:disabled) { background: #f5f3ef; }
+  .enhance-button { min-width: 116px; padding: 9px 14px; border: 1px solid rgba(255, 255, 255, 0.58); border-radius: 9px; display: flex; align-items: center; justify-content: center; gap: 7px; background: linear-gradient(180deg, #f2f0ec, #d8d5d0); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), 0 5px 18px rgba(0, 0, 0, 0.22); color: #171719; cursor: pointer; font-size: 11.5px; font-weight: 700; transition: 0.12s ease; }
+  .enhance-button:hover:not(:disabled) { background: linear-gradient(180deg, #ffffff, #e4e1dc); box-shadow: inset 0 1px 0 #fff, 0 7px 22px rgba(0, 0, 0, 0.26); }
   .enhance-button:active:not(:disabled) { transform: scale(0.98); }
   .enhance-button:disabled { opacity: 0.35; cursor: not-allowed; }
   .enhance-button kbd { color: #77746f; font-size: 9px; font-weight: 600; }
@@ -531,7 +548,7 @@
   .hotkey-hint { color: #686b72; text-align: center; font-size: 10px; }
   .hotkey-hint kbd { margin: 0 3px; padding: 2px 5px; border: 1px solid #35373c; border-radius: 5px; background: #1d1f23; color: #aaa8a4; font-size: 9px; }
 
-  .readiness { padding: 9px 4px; border-top: 1px solid #25272c; border-bottom: 1px solid #25272c; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; color: #696c72; font-size: 9.5px; }
+  .readiness { width: fit-content; max-width: 100%; margin: 0 auto; padding: 8px 11px; border: 1px solid rgba(255, 255, 255, 0.075); border-radius: 999px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; background: rgba(28, 29, 34, 0.5); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035); backdrop-filter: blur(16px) saturate(130%); -webkit-backdrop-filter: blur(16px) saturate(130%); color: #767980; font-size: 9.5px; }
   .readiness strong { color: #98b8a3; font-weight: 600; }
   .readiness.problem strong { color: #c4a46b; }
   .status-dot { width: 5px; height: 5px; border-radius: 50%; background: #78a989; }
@@ -543,7 +560,7 @@
   .error-alert { border-color: rgba(184, 92, 92, 0.22); background: rgba(184, 92, 92, 0.09); color: #d08c8c; font-size: 11.5px; line-height: 1.4; }
   .error-alert button { border-color: rgba(184, 92, 92, 0.3); color: #d08c8c; }
 
-  .result { border: 1px solid #2d2f34; border-radius: 12px; overflow: hidden; background: #17181c; animation: slide-up 0.2s ease; }
+  .result { border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; overflow: hidden; background: linear-gradient(145deg, rgba(34, 36, 42, 0.66), rgba(20, 21, 25, 0.58)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 14px 38px rgba(0, 0, 0, 0.2); backdrop-filter: blur(22px) saturate(130%); -webkit-backdrop-filter: blur(22px) saturate(130%); animation: slide-up 0.2s ease; }
   @keyframes slide-up { from { opacity: 0; transform: translateY(5px); } }
   .result header { padding: 9px 12px; border-bottom: 1px solid #292b30; display: flex; align-items: center; justify-content: space-between; color: #8b8e94; font-size: 10.5px; }
   .result header div { display: flex; align-items: center; gap: 7px; }
@@ -559,9 +576,10 @@
   .recents > header strong { color: #989aa0; font-size: 10px; font-weight: 600; }
   .recents > header button { border: 0; background: transparent; color: #6f7279; cursor: pointer; font-size: 9.5px; }
   .recents > header button:hover { color: #aaa; }
-  .recent-list { border-bottom: 1px solid #27292e; }
-  .recent-item { width: 100%; padding: 9px 7px; border: 0; border-top: 1px solid #27292e; display: grid; grid-template-columns: 28px minmax(0, 1fr) 70px 18px; align-items: center; gap: 9px; background: transparent; color: inherit; cursor: pointer; text-align: left; }
-  .recent-item:hover { background: rgba(255, 255, 255, 0.018); }
+  .recent-list { border: 1px solid rgba(255, 255, 255, 0.065); border-radius: 11px; overflow: hidden; background: rgba(24, 25, 29, 0.34); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .recent-item { width: 100%; padding: 9px 9px; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.055); display: grid; grid-template-columns: 28px minmax(0, 1fr) 70px 18px; align-items: center; gap: 9px; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+  .recent-item:first-child { border-top: 0; }
+  .recent-item:hover { background: rgba(255, 255, 255, 0.045); }
   .target-mark { width: 26px; height: 26px; border-radius: 6px; display: grid; place-items: center; background: #24262b; color: #aaa8a4; font-size: 8px; font-weight: 750; }
   .recent-prompt { overflow: hidden; color: #b6b4b0; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
   .recent-item small { color: #61646b; font-size: 9px; text-align: right; }

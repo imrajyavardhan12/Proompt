@@ -259,10 +259,10 @@
   .search {
     width: 100%;
     padding: 7px 10px 7px 30px;
-    background: #171717;
-    border: 1px solid #2a2a2a;
+    background: rgba(20, 21, 25, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: #eeeeee;
-    border-radius: 8px;
+    border-radius: 9px;
     font-size: 12.5px;
     font-family: inherit;
   }
@@ -295,9 +295,12 @@
     flex-direction: column;
     gap: 5px;
     padding: 13px 14px;
-    background: #171717;
-    border: 1px solid #2a2a2a;
-    border-radius: 10px;
+    background: linear-gradient(145deg, rgba(35, 37, 43, 0.56), rgba(19, 20, 24, 0.46));
+    border: 1px solid rgba(255, 255, 255, 0.085);
+    border-radius: 12px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+    backdrop-filter: blur(14px) saturate(125%);
+    -webkit-backdrop-filter: blur(14px) saturate(125%);
     cursor: pointer;
     text-align: left;
     color: #eeeeee;
@@ -305,8 +308,8 @@
   }
 
   .card:hover {
-    border-color: #3a3a3a;
-    background: #202020;
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.07);
   }
 
   .card.active {
@@ -367,10 +370,13 @@
   /* ── Detail pane ──────────────────── */
 
   .detail {
-    background: #171717;
-    border: 1px solid #2a2a2a;
-    border-radius: 12px;
+    background: linear-gradient(145deg, rgba(35, 37, 43, 0.62), rgba(19, 20, 24, 0.52));
+    border: 1px solid rgba(255, 255, 255, 0.095);
+    border-radius: 14px;
     padding: 18px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 14px 38px rgba(0, 0, 0, 0.16);
+    backdrop-filter: blur(18px) saturate(125%);
+    -webkit-backdrop-filter: blur(18px) saturate(125%);
     display: flex;
     flex-direction: column;
     gap: 12px;

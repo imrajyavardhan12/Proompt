@@ -344,10 +344,10 @@
   .search {
     width: 100%;
     padding: 7px 10px 7px 30px;
-    background: #171717;
-    border: 1px solid #2a2a2a;
+    background: rgba(20, 21, 25, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: #eeeeee;
-    border-radius: 8px;
+    border-radius: 9px;
     font-size: 12.5px;
     font-family: inherit;
   }
@@ -383,8 +383,8 @@
     width: 42px;
     height: 42px;
     border-radius: 12px;
-    background: #171717;
-    border: 1px solid #2a2a2a;
+    background: rgba(30, 31, 36, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: #9a9a9a;
     display: flex;
     align-items: center;
@@ -412,9 +412,12 @@
     flex-direction: column;
     gap: 12px;
     padding: 14px;
-    background: #171717;
-    border: 1px solid #2a2a2a;
-    border-radius: 12px;
+    background: linear-gradient(145deg, rgba(35, 37, 43, 0.56), rgba(19, 20, 24, 0.46));
+    border: 1px solid rgba(255, 255, 255, 0.085);
+    border-radius: 13px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 12px 34px rgba(0, 0, 0, 0.12);
+    backdrop-filter: blur(16px) saturate(125%);
+    -webkit-backdrop-filter: blur(16px) saturate(125%);
   }
 
   .card-top {

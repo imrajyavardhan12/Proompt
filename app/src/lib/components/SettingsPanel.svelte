@@ -920,13 +920,16 @@
 
   .mode-summary {
     padding: 11px 13px;
-    border: 1px solid #292b30;
-    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    background: #17181b;
+    background: linear-gradient(145deg, rgba(38, 40, 46, 0.58), rgba(21, 22, 26, 0.48));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+    backdrop-filter: blur(18px) saturate(130%);
+    -webkit-backdrop-filter: blur(18px) saturate(130%);
   }
 
   .mode-summary div {
@@ -980,10 +983,13 @@
   }
 
   .disclosure {
-    border: 1px solid #2a2c31;
-    border-radius: 11px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 12px;
     overflow: hidden;
-    background: #151619;
+    background: linear-gradient(145deg, rgba(34, 36, 42, 0.52), rgba(19, 20, 24, 0.46));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+    backdrop-filter: blur(18px) saturate(125%);
+    -webkit-backdrop-filter: blur(18px) saturate(125%);
   }
 
   .disclosure > summary {
@@ -1020,8 +1026,8 @@
   }
 
   .disclosure[open] > summary {
-    border-bottom: 1px solid #292b30;
-    background: #191a1e;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.035);
   }
 
   .disclosure[open] > summary .summary-action {
@@ -1085,22 +1091,26 @@
     flex-direction: column;
     gap: 3px;
     padding: 12px;
-    background: #171717;
-    border: 1px solid #2a2a2a;
-    border-radius: 10px;
+    background: linear-gradient(145deg, rgba(37, 39, 45, 0.55), rgba(20, 21, 25, 0.44));
+    border: 1px solid rgba(255, 255, 255, 0.085);
+    border-radius: 11px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     cursor: pointer;
     text-align: left;
     transition: all 0.12s ease;
   }
 
   .provider-card:hover {
-    border-color: #3a3a3a;
-    background: #202020;
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.07);
   }
 
   .provider-card.active {
-    border-color: rgba(214, 211, 209, 0.40);
-    background: rgba(214, 211, 209, 0.05);
+    border-color: rgba(214, 211, 209, 0.36);
+    background: rgba(214, 211, 209, 0.09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 8px 24px rgba(0, 0, 0, 0.14);
   }
 
   .provider-name {
@@ -1126,9 +1136,10 @@
     justify-content: space-between;
     gap: 12px;
     padding: 12px;
-    background: #171717;
-    border: 1px solid #2a2a2a;
-    border-radius: 10px;
+    background: rgba(28, 29, 34, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 11px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
   }
 
   .hotkey-name {
@@ -1155,8 +1166,8 @@
   .model-input,
   .key-row input {
     padding: 8px 12px;
-    background: #171717;
-    border: 1px solid #2a2a2a;
+    background: rgba(19, 20, 24, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.09);
     color: #eeeeee;
     border-radius: 8px;
     font-size: 13px;
@@ -1204,9 +1215,9 @@
     flex-direction: column;
     gap: 6px;
     padding: 10px;
-    background: #171717;
-    border: 1px solid #2a2a2a;
-    border-radius: 8px;
+    background: rgba(20, 21, 25, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    border-radius: 9px;
   }
 
   .setup-row {
@@ -1247,8 +1258,8 @@
     gap: 10px;
     margin-top: 12px;
     padding: 12px;
-    background: #171717;
-    border: 1px solid #2a2a2a;
+    background: rgba(19, 20, 24, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.075);
     border-radius: 10px;
   }
 
