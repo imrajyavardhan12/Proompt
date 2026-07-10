@@ -1,7 +1,10 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
 
-  let { initialProvider = null } = $props<{ initialProvider?: string | null }>();
+  let { initialProvider = null, initialSection = "provider" } = $props<{
+    initialProvider?: string | null;
+    initialSection?: "provider" | "troubleshoot";
+  }>();
 
   interface QuickEnhanceRouteInspection {
     promptPreview?: string | null;
@@ -441,30 +444,20 @@
 <div class="page">
   <div class="page-header">
     <h1>Settings</h1>
-    <p class="subtitle">Configure providers, keys, and preferences</p>
+    <p class="subtitle">Connect a provider and tune Quick Enhance</p>
   </div>
 
-  <!-- Mode -->
-  <section class="section">
-    <div class="section-label">Mode</div>
-    <div class="mode-grid">
-      <button
-        class="mode-card"
-        class:active={mode === "byok"}
-        onclick={() => selectMode("byok")}
-      >
-        <span class="mode-name">BYOK</span>
-        <span class="mode-desc">Use your own API key. Private and free.</span>
-      </button>
-      <button
-        class="mode-card"
-        class:active={mode === "hosted"}
-        onclick={() => selectMode("hosted")}
-      >
-        <span class="mode-name">Hosted Pro</span>
-        <span class="mode-desc">Coming soon</span>
-      </button>
+  <section class="mode-summary" class:warning={mode === "hosted"} aria-label="Enhancement mode">
+    <div>
+      <span class="status-dot" class:ok={mode === "byok"} class:bad={mode === "hosted"}></span>
+      <strong>{mode === "hosted" ? "Hosted mode is unavailable" : "Bring your own key"}</strong>
+      <small>{mode === "hosted" ? "Switch to BYOK to enhance prompts." : "Your prompts go directly to the selected provider."}</small>
     </div>
+    {#if mode === "hosted"}
+      <button class="mode-switch-button" onclick={() => selectMode("byok")}>Use BYOK</button>
+    {:else}
+      <span class="coming-soon">Hosted Pro · coming soon</span>
+    {/if}
   </section>
 
   <!-- Provider -->
@@ -489,18 +482,24 @@
     <div class="section-label">Model</div>
     <div class="select-wrap">
       <select bind:value={model}>
+        {#if !currentProvider.models.includes(model)}
+          <option value={model}>{model} (custom)</option>
+        {/if}
         {#each currentProvider.models as m}
           <option value={m}>{m}</option>
         {/each}
       </select>
     </div>
-    <input
-      class="model-input"
-      type="text"
-      bind:value={model}
-      placeholder={provider === "openrouter" ? "provider/model-id" : "Custom model id"}
-    />
-    <p class="hint">{currentProvider.modelHint}</p>
+    <details class="inline-disclosure">
+      <summary>Use a custom model ID</summary>
+      <input
+        class="model-input"
+        type="text"
+        bind:value={model}
+        placeholder={provider === "openrouter" ? "provider/model-id" : "Custom model id"}
+      />
+      <p class="hint">{currentProvider.modelHint}</p>
+    </details>
     {#if modelError}
       <p class="field-error">{modelError}</p>
     {/if}
@@ -520,17 +519,20 @@
         {testingConnection ? "..." : "Test"}
       </button>
     </div>
-    <div class="setup-guide">
-      <div class="setup-row">
-        <span>CLI</span>
-        <code>{currentProvider.cliCommand}</code>
-      </div>
-      <div class="setup-row">
-        <span>Env</span>
-        <code>export {currentProvider.envVar}=...</code>
-      </div>
-    </div>
     <p class="hint">Stored in your OS keychain. Paste a key above to test it before saving.</p>
+    <details class="inline-disclosure">
+      <summary>CLI and environment setup</summary>
+      <div class="setup-guide">
+        <div class="setup-row">
+          <span>CLI</span>
+          <code>{currentProvider.cliCommand}</code>
+        </div>
+        <div class="setup-row">
+          <span>Env</span>
+          <code>export {currentProvider.envVar}=...</code>
+        </div>
+      </div>
+    </details>
   </section>
 
   <!-- Quick Enhance Target -->
@@ -579,6 +581,12 @@
         </div>
       </label>
     </div>
+
+    <details class="disclosure troubleshoot" open={initialSection === "troubleshoot"}>
+      <summary>
+        <span><strong>Troubleshoot Quick Enhance</strong><small>Permissions, capture, routing, and delivery diagnostics</small></span>
+        <span class="summary-action">Open</span>
+      </summary>
 
     <div class="diagnostic-card">
       <div class="diagnostic-top">
@@ -794,7 +802,14 @@
         {/if}
       {/if}
     </div>
+    </details>
   </section>
+
+  <details class="disclosure advanced">
+    <summary>
+      <span><strong>Advanced settings</strong><small>Image defaults, history, integrations, and shortcut details</small></span>
+      <span class="summary-action">Open</span>
+    </summary>
 
   <!-- Default Image Platform -->
   <section class="section">
@@ -858,6 +873,7 @@
       </div>
     {/if}
   </section>
+  </details>
 
   <button class="btn-primary full-width" onclick={saveConfig} disabled={saving || !!modelError}>
     {saving ? "Saving..." : "Save settings"}
@@ -880,7 +896,7 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
-    max-width: 520px;
+    max-width: 620px;
   }
 
   .page-header {
@@ -902,6 +918,142 @@
     font-weight: 450;
   }
 
+  .mode-summary {
+    padding: 11px 13px;
+    border: 1px solid #292b30;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #17181b;
+  }
+
+  .mode-summary div {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .mode-summary strong {
+    color: #e8e6e2;
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+
+  .mode-summary small,
+  .coming-soon {
+    color: #6f7279;
+    font-size: 10px;
+  }
+
+  .coming-soon { white-space: nowrap; }
+
+  .mode-summary.warning {
+    border-color: rgba(196, 164, 107, 0.24);
+    background: rgba(196, 164, 107, 0.07);
+  }
+
+  .mode-switch-button {
+    padding: 6px 9px;
+    border: 1px solid #454137;
+    border-radius: 7px;
+    background: transparent;
+    color: #d1bea0;
+    cursor: pointer;
+    font-size: 10.5px;
+    white-space: nowrap;
+  }
+
+  .inline-disclosure summary {
+    width: fit-content;
+    color: #777a80;
+    cursor: pointer;
+    font-size: 10.5px;
+    list-style-position: inside;
+  }
+
+  .inline-disclosure[open] summary {
+    margin-bottom: 7px;
+    color: #aaa;
+  }
+
+  .disclosure {
+    border: 1px solid #2a2c31;
+    border-radius: 11px;
+    overflow: hidden;
+    background: #151619;
+  }
+
+  .disclosure > summary {
+    padding: 12px 13px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .disclosure > summary::-webkit-details-marker { display: none; }
+
+  .disclosure > summary > span:first-child {
+    display: grid;
+    gap: 3px;
+  }
+
+  .disclosure > summary strong {
+    color: #deddd9;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .disclosure > summary small {
+    color: #696c72;
+    font-size: 10px;
+  }
+
+  .summary-action {
+    color: #85888e;
+    font-size: 10px;
+  }
+
+  .disclosure[open] > summary {
+    border-bottom: 1px solid #292b30;
+    background: #191a1e;
+  }
+
+  .disclosure[open] > summary .summary-action {
+    font-size: 0;
+  }
+
+  .disclosure[open] > summary .summary-action::after {
+    content: "Close";
+    font-size: 10px;
+  }
+
+  .troubleshoot {
+    margin-top: 12px;
+  }
+
+  .troubleshoot[open] {
+    padding: 0 12px 12px;
+  }
+
+  .troubleshoot[open] > summary {
+    margin: 0 -12px 2px;
+  }
+
+  .advanced > .section {
+    margin: 14px 13px;
+  }
+
+  .advanced > .section + .section {
+    padding-top: 14px;
+    border-top: 1px solid #292b30;
+  }
+
   .section {
     display: flex;
     flex-direction: column;
@@ -920,16 +1072,14 @@
     align-items: center;
   }
 
-  /* ── Mode and provider cards ──────── */
+  /* ── Provider cards ───────────────── */
 
-  .mode-grid,
   .provider-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
 
-  .mode-card,
   .provider-card {
     display: flex;
     flex-direction: column;
@@ -943,31 +1093,26 @@
     transition: all 0.12s ease;
   }
 
-  .mode-card:hover,
   .provider-card:hover {
     border-color: #3a3a3a;
     background: #202020;
   }
 
-  .mode-card.active,
   .provider-card.active {
     border-color: rgba(214, 211, 209, 0.40);
     background: rgba(214, 211, 209, 0.05);
   }
 
-  .mode-name,
   .provider-name {
     font-size: 13px;
     font-weight: 600;
     color: #eeeeee;
   }
 
-  .mode-card.active .mode-name,
   .provider-card.active .provider-name {
     color: #f5f5f4;
   }
 
-  .mode-desc,
   .provider-desc {
     font-size: 11px;
     color: #787878;

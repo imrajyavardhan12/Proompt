@@ -11,101 +11,88 @@
     mode: "text" | "image";
   }
 
-  let activeTab = $state<"enhance" | "history" | "templates" | "settings">("enhance");
+  type View = "enhance" | "history" | "templates" | "settings";
+  type SettingsSection = "provider" | "troubleshoot";
+
+  let activeView = $state<View>("enhance");
   let settingsProviderHint = $state<string | null>(null);
+  let settingsSectionHint = $state<SettingsSection>("provider");
   let enhanceDraft = $state<EnhanceDraft | null>(null);
 
-  function openSettings(providerHint?: string) {
+  function openEnhance() {
+    activeView = "enhance";
+  }
+
+  function openSettings(providerHint?: string, sectionHint: SettingsSection = "provider") {
     settingsProviderHint = providerHint ?? null;
-    activeTab = "settings";
+    settingsSectionHint = sectionHint;
+    activeView = "settings";
   }
 
   function reuseHistoryDraft(draft: EnhanceDraft) {
     enhanceDraft = draft;
-    activeTab = "enhance";
+    activeView = "enhance";
   }
 </script>
 
 <div class="app-shell">
-  <aside class="sidebar">
-    <div class="sidebar-top">
-      <div class="brand">
-        <div class="brand-mark">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 3L20 7.5V16.5L12 21L4 16.5V7.5L12 3Z"/>
-            <path d="M12 12L20 7.5"/>
-            <path d="M12 12V21"/>
-            <path d="M12 12L4 7.5"/>
-          </svg>
-        </div>
-        <span class="brand-text">Proompt</span>
-      </div>
+  <header class="topbar">
+    <button class="brand" onclick={openEnhance} aria-label="Open prompt workspace">
+      <span class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3L20 7.5V16.5L12 21L4 16.5V7.5L12 3Z"/>
+          <path d="M12 12L20 7.5"/>
+          <path d="M12 12V21"/>
+          <path d="M12 12L4 7.5"/>
+        </svg>
+      </span>
+      <span>Proompt</span>
+    </button>
 
-      <nav class="nav">
-        <button
-          class="nav-item"
-          class:active={activeTab === "enhance"}
-          onclick={() => (activeTab = "enhance")}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
-          <span>Enhance</span>
-        </button>
-        <button
-          class="nav-item"
-          class:active={activeTab === "history"}
-          onclick={() => (activeTab = "history")}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 3v5h5"/>
-            <path d="M3.05 13A9 9 0 1 0 5 5.3L3 8"/>
-            <path d="M12 7v5l3 2"/>
-          </svg>
-          <span>History</span>
-        </button>
-        <button
-          class="nav-item"
-          class:active={activeTab === "templates"}
-          onclick={() => (activeTab = "templates")}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7" rx="1"/>
-            <rect x="14" y="3" width="7" height="7" rx="1"/>
-            <rect x="3" y="14" width="7" height="7" rx="1"/>
-            <rect x="14" y="14" width="7" height="7" rx="1"/>
-          </svg>
-          <span>Templates</span>
-        </button>
-        <button
-          class="nav-item"
-          class:active={activeTab === "settings"}
-          onclick={() => openSettings()}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-          </svg>
-          <span>Settings</span>
-        </button>
-      </nav>
+    <div class="workspace-label">
+      <span class="workspace-dot"></span>
+      Quick Enhance
     </div>
 
-    <div class="sidebar-bottom">
-      <div class="version">v0.3.4</div>
-    </div>
-  </aside>
+    <nav class="top-actions" aria-label="Primary navigation">
+      {#if activeView !== "enhance"}
+        <button class="nav-button" onclick={openEnhance}>Enhance</button>
+      {/if}
+      <button
+        class="nav-button"
+        class:active={activeView === "history"}
+        onclick={() => (activeView = "history")}
+      >History</button>
+      <button
+        class="settings-button"
+        class:active={activeView === "settings"}
+        onclick={() => openSettings()}
+        aria-label="Settings"
+        title="Settings"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+      </button>
+    </nav>
+  </header>
 
-  <main class="main">
+  <main class="main" class:focus={activeView === "enhance"}>
     <div class="main-inner">
-      {#if activeTab === "enhance"}
-        <EnhancePanel onOpenSettings={openSettings} draft={enhanceDraft} />
-      {:else if activeTab === "history"}
+      {#if activeView === "enhance"}
+        <EnhancePanel
+          onOpenSettings={openSettings}
+          onOpenHistory={() => (activeView = "history")}
+          onOpenTemplates={() => (activeView = "templates")}
+          draft={enhanceDraft}
+        />
+      {:else if activeView === "history"}
         <HistoryPanel onReuse={reuseHistoryDraft} />
-      {:else if activeTab === "templates"}
+      {:else if activeView === "templates"}
         <TemplatesPanel />
-      {:else if activeTab === "settings"}
-        <SettingsPanel initialProvider={settingsProviderHint} />
+      {:else}
+        <SettingsPanel initialProvider={settingsProviderHint} initialSection={settingsSectionHint} />
       {/if}
     </div>
   </main>
@@ -126,135 +113,160 @@
       "Inter",
       "Segoe UI",
       sans-serif;
-    background: #111111;
+    background: #0e0f11;
     color: #f5f5f5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
   }
 
-  :global(::-webkit-scrollbar) {
-    width: 5px;
+  :global(button),
+  :global(input),
+  :global(select),
+  :global(textarea) {
+    font: inherit;
   }
-  :global(::-webkit-scrollbar-track) {
-    background: transparent;
-  }
-  :global(::-webkit-scrollbar-thumb) {
-    background: #3a3a3a;
-    border-radius: 99px;
-  }
-  :global(::-webkit-scrollbar-thumb:hover) {
-    background: #5f5f5f;
-  }
+
+  :global(::-webkit-scrollbar) { width: 5px; }
+  :global(::-webkit-scrollbar-track) { background: transparent; }
+  :global(::-webkit-scrollbar-thumb) { background: #3a3a3a; border-radius: 99px; }
+  :global(::-webkit-scrollbar-thumb:hover) { background: #5f5f5f; }
 
   .app-shell {
     display: flex;
-    height: 100vh;
+    flex-direction: column;
     width: 100vw;
+    height: 100vh;
+    background: #0e0f11;
   }
 
-  .sidebar {
-    width: 200px;
-    min-width: 200px;
-    background: #111111;
-    border-right: 1px solid #2a2a2a;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 16px 10px;
+  .topbar {
+    z-index: 2;
+    height: 62px;
+    min-height: 62px;
+    padding: 0 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
     -webkit-app-region: drag;
     user-select: none;
   }
 
-  .sidebar-top {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-  }
-
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 2px 6px;
-  }
-
-  .brand-mark {
-    width: 28px;
-    height: 28px;
-    background: #1f1f1f;
-    border: 1px solid #3a3a3a;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #e7e5e4;
-    flex-shrink: 0;
-  }
-
-  .brand-text {
-    font-weight: 650;
-    font-size: 15px;
-    color: #f5f5f5;
-    letter-spacing: -0.4px;
-  }
-
-  .nav {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+  .brand,
+  .nav-button,
+  .settings-button {
     -webkit-app-region: no-drag;
   }
 
-  .nav-item {
+  .brand {
+    width: fit-content;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border: none;
+    gap: 9px;
+    border: 0;
     background: transparent;
-    color: #9a9a9a;
+    color: #f0efec;
     cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: -0.3px;
+  }
+
+  .brand-mark {
+    width: 29px;
+    height: 29px;
+    border: 1px solid #393b40;
     border-radius: 8px;
-    transition: all 0.12s ease;
-    text-align: left;
+    display: grid;
+    place-items: center;
+    background: #1d1f23;
+    color: #e7e5e4;
   }
 
-  .nav-item:hover {
-    color: #bebebe;
-    background: #202020;
+  .workspace-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #777a80;
+    font-size: 10.5px;
+    font-weight: 550;
   }
 
-  .nav-item.active {
-    color: #f5f5f5;
-    background: #202020;
+  .workspace-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #62656b;
+    box-shadow: 0 0 0 3px rgba(98, 101, 107, 0.08);
   }
 
-  .nav-item.active svg {
-    color: #d6d3d1;
+  .top-actions {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    -webkit-app-region: no-drag;
   }
 
-  .sidebar-bottom {
-    padding: 0 6px;
+  .nav-button,
+  .settings-button {
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: #85888e;
+    cursor: pointer;
+    transition: 0.12s ease;
   }
 
-  .version {
-    font-size: 11px;
-    color: #5f5f5f;
-    font-weight: 500;
+  .nav-button {
+    padding: 7px 9px;
+    font-size: 11.5px;
+    font-weight: 550;
+  }
+
+  .settings-button {
+    width: 36px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+  }
+
+  .nav-button:hover,
+  .settings-button:hover,
+  .nav-button.active,
+  .settings-button.active {
+    border-color: #2d2f34;
+    background: #1b1d21;
+    color: #ecebea;
   }
 
   .main {
     flex: 1;
     overflow-y: auto;
-    background: #111111;
+    background: #111214;
+  }
+
+  .main.focus {
+    background: radial-gradient(circle at 50% 20%, #1a1c20 0, #111214 42%, #0e0f11 100%);
   }
 
   .main-inner {
-    max-width: 820px;
+    width: min(860px, calc(100vw - 48px));
     margin: 0 auto;
-    padding: 34px 30px;
+    padding: 34px 0 48px;
+  }
+
+  .main.focus .main-inner {
+    width: min(700px, calc(100vw - 48px));
+    padding-top: 48px;
+  }
+
+  @media (max-width: 620px) {
+    .topbar { padding: 0 14px; }
+    .workspace-label { display: none; }
+    .topbar { grid-template-columns: 1fr auto; }
+    .main-inner,
+    .main.focus .main-inner { width: min(100% - 28px, 700px); }
   }
 </style>

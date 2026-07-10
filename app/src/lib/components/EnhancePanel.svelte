@@ -4,9 +4,7 @@
   interface AppConfig {
     default_platform?: string;
     default_image_platform?: string;
-    hotkeys?: {
-      quick_enhance?: string;
-    };
+    hotkeys?: { quick_enhance?: string };
     quick_enhance?: {
       auto_detect_target?: boolean;
       selected_text_enabled?: boolean;
@@ -31,8 +29,25 @@
     cli_command: string;
   }
 
-  let { onOpenSettings = () => {}, draft = null } = $props<{
-    onOpenSettings?: (providerHint?: string) => void;
+  interface RecentPrompt {
+    id: string;
+    original_prompt: string;
+    enhancement_type: "text" | "image";
+    platform: string;
+    created_at_ms: number;
+  }
+
+  type SettingsSection = "provider" | "troubleshoot";
+
+  let {
+    onOpenSettings = () => {},
+    onOpenHistory = () => {},
+    onOpenTemplates = () => {},
+    draft = null,
+  } = $props<{
+    onOpenSettings?: (providerHint?: string, sectionHint?: SettingsSection) => void;
+    onOpenHistory?: () => void;
+    onOpenTemplates?: () => void;
     draft?: EnhanceDraft | null;
   }>();
 
@@ -55,6 +70,8 @@
   let providerSetup = $state<ProviderSetupStatus | null>(null);
   let setupStatusLoading = $state(true);
   let appliedDraftId = $state<string | null>(null);
+  let recentPrompts = $state<RecentPrompt[]>([]);
+  let promptInput: HTMLTextAreaElement;
 
   const textPlatformGroups = [
     {
@@ -78,21 +95,19 @@
   ];
 
   const textPlatforms = textPlatformGroups.flatMap((group) => group.platforms);
-
   const imagePlatforms = [
     { id: "midjourney", label: "Midjourney" },
     { id: "dalle", label: "DALL-E" },
     { id: "stablediffusion", label: "Stable Diffusion" },
     { id: "generic", label: "Generic" },
   ];
-
   const styleOptions = [
     "Photorealistic", "Cinematic", "Anime", "Oil Painting",
     "3D Render", "Watercolor", "Sketch", "Pixel Art",
   ];
 
   let platforms = $derived(mode === "text" ? textPlatforms : imagePlatforms);
-  let isResultStale = $derived(!!enhancedPrompt && (platform !== resultPlatform || mode !== resultMode));
+  let isResultStale = $derived(Boolean(enhancedPrompt) && (platform !== resultPlatform || mode !== resultMode));
   let providerNeedsSetup = $derived(Boolean(providerSetup && providerSetup.mode === "byok" && providerSetup.api_key_status === "missing"));
   let hostedModeUnavailable = $derived(Boolean(providerSetup && providerSetup.mode === "hosted"));
   let missingKeyError = $derived(isMissingApiKeyError(error));
@@ -100,24 +115,20 @@
   let setupIssueVisible = $derived(!setupStatusLoading && (providerNeedsSetup || hostedModeUnavailable || missingKeyError || hostedModeError));
   let activeProviderLabel = $derived(providerLabel(providerSetup?.provider || "openai"));
   let quickEnhanceHotkeyDisplay = $derived(formatHotkey(quickEnhanceHotkey));
+  let submitShortcutDisplay = $derived(
+    typeof navigator !== "undefined" && navigator.platform?.includes("Mac") ? "⌘↵" : "Ctrl ↵"
+  );
   let quickEnhanceTargetLabel = $derived(getPlatformLabel(defaultTextPlatform, "text"));
-  let quickEnhanceRoutingCopy = $derived(
-    autoDetectTarget
-      ? `Auto-detects active app, falls back to ${quickEnhanceTargetLabel}`
-      : `Uses ${quickEnhanceTargetLabel}`
+  let readinessLabel = $derived(getReadinessLabel());
+  let readinessProblem = $derived(
+    !setupStatusLoading && (!providerSetup || providerNeedsSetup || hostedModeUnavailable || providerSetup.api_key_status === "error")
   );
-  let quickEnhanceInputCopy = $derived(
-    selectedTextEnabled ? "Select or copy rough text" : "Copy rough text"
-  );
-  let recommendedProviderCopy = $derived(
-    providerSetup?.provider === "openrouter"
-      ? "You're already using OpenRouter. Paste your OpenRouter key in Settings to unlock GPT, Claude, Gemini, and OSS models."
-      : "Fastest path: switch to OpenRouter in Settings. One key unlocks GPT, Claude, Gemini, and OSS models."
-  );
+  let targetControlLabel = $derived(getPlatformLabel(platform, mode));
+  let charCount = $derived(prompt.length);
 
   function getPlatformLabel(id: string, enhancementMode: "text" | "image") {
     const options = enhancementMode === "text" ? textPlatforms : imagePlatforms;
-    return options.find((p) => p.id === id)?.label ?? id;
+    return options.find((item) => item.id === id)?.label ?? id;
   }
 
   function providerLabel(providerId: string) {
@@ -150,6 +161,14 @@
     return message.toLowerCase().includes("hosted mode");
   }
 
+  function getReadinessLabel() {
+    if (setupStatusLoading) return "Checking setup";
+    if (hostedModeUnavailable) return "Hosted unavailable";
+    if (!providerSetup || providerSetup.api_key_status === "error") return "Check setup";
+    if (providerNeedsSetup) return "Provider key needed";
+    return "Ready";
+  }
+
   async function loadConfigDefaults() {
     try {
       const config = await invoke<AppConfig>("get_config");
@@ -180,31 +199,53 @@
     }
   }
 
+  async function loadRecentPrompts() {
+    try {
+      recentPrompts = await invoke<RecentPrompt[]>("list_history", {
+        limit: 3,
+        favoritesOnly: false,
+      });
+    } catch {
+      recentPrompts = [];
+    }
+  }
+
   $effect(() => {
     loadConfigDefaults();
     loadProviderSetup();
+    loadRecentPrompts();
   });
 
   $effect(() => {
     if (draft && draft.id !== appliedDraftId) {
-      prompt = draft.prompt;
-      mode = draft.mode;
-      platform = draft.platform;
-      enhancedPrompt = "";
-      error = "";
-      copied = false;
-      selectedStyles = new Set();
+      applyPrompt(draft.prompt, draft.mode, draft.platform);
       appliedDraftId = draft.id;
     }
   });
 
   $effect(() => {
-    const ids = platforms.map((p) => p.id);
+    const ids = platforms.map((item) => item.id);
     const preferred = mode === "text" ? defaultTextPlatform : defaultImagePlatform;
-    if (!ids.includes(platform)) {
-      platform = ids.includes(preferred) ? preferred : ids[0];
-    }
+    if (!ids.includes(platform)) platform = ids.includes(preferred) ? preferred : ids[0];
   });
+
+  function applyPrompt(nextPrompt: string, nextMode: "text" | "image", nextPlatform: string) {
+    prompt = nextPrompt;
+    mode = nextMode;
+    platform = nextPlatform;
+    enhancedPrompt = "";
+    error = "";
+    copied = false;
+    selectedStyles = new Set();
+  }
+
+  function reuseRecent(record: RecentPrompt) {
+    applyPrompt(record.original_prompt, record.enhancement_type, record.platform);
+    requestAnimationFrame(() => {
+      promptInput?.scrollIntoView({ behavior: "smooth", block: "center" });
+      promptInput?.focus({ preventScroll: true });
+    });
+  }
 
   function toggleStyle(style: string) {
     const next = new Set(selectedStyles);
@@ -213,9 +254,9 @@
     selectedStyles = next;
   }
 
-  function handleKeydown(e: KeyboardEvent) {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
+  function handleKeydown(event: KeyboardEvent) {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      event.preventDefault();
       handleEnhance();
     }
   }
@@ -228,23 +269,21 @@
     const requestedPlatform = platform;
     const requestedMode = mode;
     try {
-      const result = await invoke<string>("enhance_prompt", {
-        prompt: prompt,
+      enhancedPrompt = await invoke<string>("enhance_prompt", {
+        prompt,
         platform: requestedPlatform,
         enhanceType: requestedMode,
-        includeMemory: includeMemory,
+        includeMemory,
         styleHints: requestedMode === "image" ? Array.from(selectedStyles) : null,
       });
-      enhancedPrompt = result;
       resultPlatform = requestedPlatform;
       resultMode = requestedMode;
       loadProviderSetup();
-    } catch (e: any) {
-      const message = e?.toString?.() ?? `${e}`;
+      loadRecentPrompts();
+    } catch (caught: any) {
+      const message = caught?.toString?.() ?? `${caught}`;
       error = message;
-      if (isMissingApiKeyError(message) || isHostedModeError(message)) {
-        await loadProviderSetup();
-      }
+      if (isMissingApiKeyError(message) || isHostedModeError(message)) await loadProviderSetup();
     } finally {
       isLoading = false;
     }
@@ -261,789 +300,280 @@
     setTimeout(() => (copied = false), 2000);
   }
 
-  let charCount = $derived(prompt.length);
+  function relativeTime(timestampMs: number) {
+    if (!timestampMs) return "Unknown";
+    const seconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
+    if (seconds < 60) return "Just now";
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(timestampMs));
+  }
+
+  function targetMark(record: RecentPrompt) {
+    const label = getPlatformLabel(record.platform, record.enhancement_type);
+    return label.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  }
 </script>
 
-<div class="page">
-  <div class="page-header">
-    <h1>Enhance</h1>
-    <p class="subtitle">Transform rough prompts into optimized ones</p>
-  </div>
-
-  <div class="quick-tip">
-    <div class="quick-tip-icon">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-    </div>
-    <div class="quick-tip-copy">
-      <strong>Quick enhance from anywhere</strong>
-      <span>{quickEnhanceRoutingCopy}. {quickEnhanceInputCopy}, press <kbd>{quickEnhanceHotkeyDisplay}</kbd>. Selected text is replaced when possible; otherwise the result is copied. Prefix with /cc, /cursor, or /codex to override.</span>
-    </div>
-  </div>
+<div class="workspace">
+  <header class="intro">
+    <p>Prompt workspace</p>
+    <h1>What do you want the AI to do?</h1>
+  </header>
 
   {#if setupIssueVisible}
-    <div class="setup-card" class:warning={hostedModeUnavailable || hostedModeError}>
-      <div class="setup-icon">
-        {#if hostedModeUnavailable || hostedModeError}
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        {:else}
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7a2 2 0 0 1 2 2"/><path d="M15.5 3.5a6 6 0 0 1 6 6"/><path d="M5 12.5a5 5 0 0 1 7 7l-2 2-2-2-2 2-3-3 2-2a5 5 0 0 1 0-7Z"/></svg>
-        {/if}
+    <section class="setup-alert" class:warning={hostedModeUnavailable || hostedModeError}>
+      <div>
+        <strong>{hostedModeUnavailable || hostedModeError ? "Hosted mode is not available yet" : "Add a provider key to start"}</strong>
+        <span>
+          {hostedModeUnavailable || hostedModeError
+            ? "Switch to BYOK and connect a provider."
+            : `Connect ${activeProviderLabel} for ${providerSetup?.model || "your selected model"}.`}
+        </span>
       </div>
-      <div class="setup-content">
-        {#if hostedModeUnavailable || hostedModeError}
-          <h2>Hosted mode is not available yet</h2>
-          <p>Switch to BYOK mode and add your own provider key to start enhancing prompts.</p>
-        {:else}
-          <h2>Add a provider key to start</h2>
-          <p>
-            Proompt is in BYOK mode. Add a {activeProviderLabel} key for
-            <strong>{providerSetup?.model || "your selected model"}</strong>, or switch providers.
-          </p>
-          <p class="setup-recommendation">{recommendedProviderCopy}</p>
-        {/if}
-
-        {#if providerSetup && !hostedModeUnavailable}
-          <div class="setup-guide-inline">
-            <span>CLI</span>
-            <code>{providerSetup.cli_command}</code>
-          </div>
-          <div class="setup-guide-inline">
-            <span>Env</span>
-            <code>export {providerSetup.env_var}=...</code>
-          </div>
-        {/if}
-
-        <div class="setup-actions">
-          <button
-            class="btn-secondary"
-            onclick={() => onOpenSettings(hostedModeUnavailable || hostedModeError ? undefined : "openrouter")}
-          >
-            {hostedModeUnavailable || hostedModeError ? "Open Settings" : "Set up OpenRouter"}
-          </button>
-        </div>
-      </div>
-    </div>
+      <button onclick={() => onOpenSettings(hostedModeUnavailable || hostedModeError ? undefined : "openrouter", "provider")}>
+        {hostedModeUnavailable || hostedModeError ? "Open settings" : "Set up OpenRouter"}
+      </button>
+    </section>
   {/if}
 
-  <div class="card">
-    <div class="card-section">
-      <div class="mode-switch">
-        <button class:active={mode === "text"} onclick={() => (mode = "text")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          Text
-        </button>
-        <button class:active={mode === "image"} onclick={() => (mode = "image")}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-          Image
-        </button>
+  <section class="composer">
+    <div class="composer-top">
+      <div class="mode-switch" aria-label="Enhancement type">
+        <button class:active={mode === "text"} onclick={() => (mode = "text")}>Text</button>
+        <button class:active={mode === "image"} onclick={() => (mode = "image")}>Image</button>
       </div>
+      <button class="template-button" onclick={onOpenTemplates}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        Templates
+      </button>
     </div>
 
-    <div class="divider"></div>
-
-    <div class="card-section">
-      <div class="label-row">
-        <span class="label">Target platform</span>
-      </div>
-      {#if mode === "text"}
-        <div class="chip-groups">
-          {#each textPlatformGroups as group}
-            <div class="chip-group">
-              <span class="chip-group-label">{group.label}</span>
-              <div class="chips">
-                {#each group.platforms as p}
-                  <button
-                    class="chip"
-                    class:active={platform === p.id}
-                    onclick={() => (platform = p.id)}
-                  >
-                    {p.label}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/each}
-        </div>
-      {:else}
-        <div class="chips">
-          {#each platforms as p}
-            <button
-              class="chip"
-              class:active={platform === p.id}
-              onclick={() => (platform = p.id)}
-            >
-              {p.label}
-            </button>
-          {/each}
-        </div>
-      {/if}
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="card-section">
-      <div class="textarea-wrap">
-        <textarea
-          bind:value={prompt}
-          onkeydown={handleKeydown}
-          placeholder={mode === "text"
-            ? "Type or paste your rough prompt here..."
-            : "Describe your image idea..."}
-          rows="5"
-        ></textarea>
-        <div class="textarea-footer">
-          <span class="char-count">{charCount}</span>
-          <span class="kbd-hint">
-            <kbd>{navigator.platform?.includes("Mac") ? "\u2318" : "Ctrl"}</kbd>
-            <kbd>Enter</kbd>
-          </span>
-        </div>
-      </div>
-    </div>
+    <textarea
+      bind:this={promptInput}
+      bind:value={prompt}
+      onkeydown={handleKeydown}
+      placeholder={mode === "text" ? "Describe the task, constraints, and desired outcome..." : "Describe the image you want to create..."}
+      aria-label="Prompt to enhance"
+    ></textarea>
 
     {#if mode === "image"}
-      <div class="divider"></div>
-      <div class="card-section">
-        <span class="label">Style hints</span>
-        <div class="chips">
+      <div class="style-row">
+        <span>Style</span>
+        <div>
           {#each styleOptions as style}
-            <button
-              class="chip"
-              class:active={selectedStyles.has(style)}
-              onclick={() => toggleStyle(style)}
-            >
-              {style}
-            </button>
+            <button class:active={selectedStyles.has(style)} onclick={() => toggleStyle(style)}>{style}</button>
           {/each}
         </div>
       </div>
     {/if}
 
-    <div class="divider"></div>
+    <div class="composer-controls">
+      <div class="control-group">
+        <label class="target-select">
+          <span>Target</span>
+          <strong>{targetControlLabel}</strong>
+          <select bind:value={platform} aria-label="Target platform">
+            {#if mode === "text"}
+              {#each textPlatformGroups as group}
+                <optgroup label={group.label}>
+                  {#each group.platforms as item}<option value={item.id}>{item.label}</option>{/each}
+                </optgroup>
+              {/each}
+            {:else}
+              {#each imagePlatforms as item}<option value={item.id}>{item.label}</option>{/each}
+            {/if}
+          </select>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        </label>
 
-    <div class="card-section card-footer">
-      <label class="toggle">
-        <div class="toggle-track" class:on={includeMemory}>
+        <label class="memory-toggle" class:on={includeMemory} title="Include SuperMemory context">
           <input type="checkbox" bind:checked={includeMemory} />
-          <div class="toggle-thumb"></div>
-        </div>
-        <span class="toggle-label">SuperMemory</span>
-      </label>
+          Memory
+        </label>
+        <span class="char-count">{charCount}</span>
+      </div>
 
       <button
-        class="btn-primary"
+        class="enhance-button"
         onclick={handleEnhance}
         disabled={isLoading || !prompt.trim() || setupStatusLoading || providerNeedsSetup || hostedModeUnavailable}
       >
-        {#if isLoading}
-          <span class="spinner"></span>
-          Enhancing...
-        {:else if setupStatusLoading}
-          Checking setup...
-        {:else}
-          Enhance prompt
-        {/if}
+        {#if isLoading}<span class="spinner"></span>Enhancing…{:else}Enhance <kbd>{submitShortcutDisplay}</kbd>{/if}
       </button>
     </div>
-  </div>
+  </section>
+
+  <p class="hotkey-hint">
+    Or {selectedTextEnabled ? "select or copy text" : "copy text"} in any app and press
+    <kbd>{quickEnhanceHotkeyDisplay}</kbd>. Proompt {selectedTextEnabled ? "replaces it when safe" : "copies the result"}.
+  </p>
+
+  <section class="readiness" class:problem={readinessProblem}>
+    <span class="status-dot"></span>
+    <strong>{readinessLabel}</strong>
+    <span class="separator">·</span>
+    <span>{activeProviderLabel}{providerSetup?.model ? ` / ${providerSetup.model}` : ""}</span>
+    <span class="separator">·</span>
+    <span>{autoDetectTarget ? "Auto-route" : `${quickEnhanceTargetLabel} fallback`}</span>
+    <span class="separator">·</span>
+    <span>Selected text {selectedTextEnabled ? "enabled" : "off"}</span>
+    <button onclick={() => onOpenSettings(undefined, "troubleshoot")}>Troubleshoot</button>
+  </section>
 
   {#if error && !missingKeyError && !hostedModeError}
-    <div class="alert alert-error">{error}</div>
+    <div class="error-alert">
+      <span>{error}</span>
+      <button onclick={() => onOpenSettings(undefined, "troubleshoot")}>Troubleshoot</button>
+    </div>
   {/if}
 
   {#if enhancedPrompt}
-    <div class="result" >
-      <div class="result-bar">
-        <div class="result-bar-left">
-          <div class="result-dot"></div>
-          <span>Enhanced for {getPlatformLabel(resultPlatform, resultMode)}</span>
-          {#if isResultStale}
-            <span class="result-stale">Selection changed · regenerate</span>
-          {/if}
+    <section class="result">
+      <header>
+        <div>
+          <span class="result-dot"></span>
+          Enhanced for {getPlatformLabel(resultPlatform, resultMode)}
+          {#if isResultStale}<em>Selection changed · regenerate</em>{/if}
         </div>
-        <button class="btn-ghost" class:copied onclick={copyToClipboard}>
+        <button class:copied onclick={copyToClipboard}>
           {#if copied}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m20 6-11 11-5-5"/></svg>
             Copied
           {:else}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             Copy
           {/if}
         </button>
+      </header>
+      <pre>{enhancedPrompt}</pre>
+    </section>
+  {/if}
+
+  {#if recentPrompts.length > 0}
+    <section class="recents">
+      <header><strong>Recent work</strong><button onclick={onOpenHistory}>View all</button></header>
+      <div class="recent-list">
+        {#each recentPrompts as record}
+          <button class="recent-item" onclick={() => reuseRecent(record)}>
+            <span class="target-mark">{targetMark(record)}</span>
+            <span class="recent-prompt">{record.original_prompt}</span>
+            <small>{relativeTime(record.created_at_ms)}</small>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg>
+          </button>
+        {/each}
       </div>
-      <pre class="result-body">{enhancedPrompt}</pre>
-    </div>
+    </section>
   {/if}
 </div>
 
 <style>
-  .page {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .page-header {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  h1 {
-    font-size: 22px;
-    font-weight: 650;
-    color: #f5f5f5;
-    letter-spacing: -0.5px;
-  }
-
-  .subtitle {
-    font-size: 13px;
-    color: #787878;
-    font-weight: 450;
-  }
-
-  /* ── Quick enhance tip ────────────── */
-
-  .quick-tip {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    background: #171717;
-    border: 1px solid #2a2a2a;
-    border-radius: 10px;
-  }
-
-  .quick-tip-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: rgba(214, 211, 209, 0.08);
-    color: #f5f5f4;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .quick-tip-copy {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    font-size: 12px;
-    color: #9a9a9a;
-  }
-
-  .quick-tip-copy strong {
-    color: #dedede;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .quick-tip-copy span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* ── First-run setup ──────────────── */
-
-  .setup-card {
-    display: flex;
-    gap: 14px;
-    padding: 16px;
-    background: rgba(214, 211, 209, 0.06);
-    border: 1px solid rgba(214, 211, 209, 0.20);
-    border-radius: 12px;
-  }
-
-  .setup-card.warning {
-    background: rgba(196, 164, 107, 0.08);
-    border-color: rgba(196, 164, 107, 0.24);
-  }
-
-  .setup-icon {
-    width: 34px;
-    height: 34px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    border-radius: 10px;
-    background: rgba(214, 211, 209, 0.12);
-    color: #f5f5f4;
-  }
-
-  .setup-card.warning .setup-icon {
-    background: rgba(196, 164, 107, 0.14);
-    color: #c4a46b;
-  }
-
-  .setup-content {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .setup-content h2 {
-    font-size: 14px;
-    font-weight: 650;
-    color: #f5f5f5;
-    letter-spacing: -0.2px;
-  }
-
-  .setup-content p {
-    font-size: 12.5px;
-    color: #bebebe;
-    line-height: 1.45;
-    margin: 0;
-  }
-
-  .setup-content strong {
-    color: #dedede;
-    font-weight: 600;
-  }
-
-  .setup-recommendation {
-    color: #f5f5f4 !important;
-  }
-
-  .setup-guide-inline {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .setup-guide-inline span {
-    width: 28px;
-    flex-shrink: 0;
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #787878;
-  }
-
-  .setup-guide-inline code {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    padding: 3px 6px;
-    background: #202020;
-    border: 1px solid #3a3a3a;
-    border-radius: 5px;
-    color: #bebebe;
-    font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
-    font-size: 10.5px;
-  }
-
-  .setup-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 2px;
-  }
-
-  /* ── Card ─────────────────────────── */
-
-  .card {
-    background: #171717;
-    border: 1px solid #2a2a2a;
-    border-radius: 12px;
-    overflow: hidden;
-  }
-
-  .card-section {
-    padding: 14px 18px;
-  }
-
-  .card-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .divider {
-    height: 1px;
-    background: #2a2a2a;
-  }
-
-  /* ── Mode switch ──────────────────── */
-
-  .mode-switch {
-    display: inline-flex;
-    background: #202020;
-    border-radius: 8px;
-    padding: 3px;
-    gap: 2px;
-  }
-
-  .mode-switch button {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    border: none;
-    background: transparent;
-    color: #787878;
-    cursor: pointer;
-    font-size: 12.5px;
-    font-weight: 550;
-    border-radius: 6px;
-    transition: all 0.12s ease;
-  }
-
-  .mode-switch button.active {
-    background: #3a3a3a;
-    color: #f5f5f5;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
-  }
-
-  .mode-switch button.active svg {
-    color: #d6d3d1;
-  }
-
-  /* ── Labels & chips ───────────────── */
-
-  .label-row {
-    margin-bottom: 10px;
-  }
-
-  .label {
-    font-size: 11.5px;
-    font-weight: 600;
-    color: #787878;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-  }
-
-  .chip-groups {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .chip-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .chip-group-label {
-    font-size: 10.5px;
-    font-weight: 600;
-    color: #5f5f5f;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .chips {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .chip {
-    padding: 5px 12px;
-    border: 1px solid #3a3a3a;
-    background: transparent;
-    color: #9a9a9a;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 500;
-    transition: all 0.12s ease;
-  }
-
-  .chip:hover {
-    color: #bebebe;
-    border-color: #5f5f5f;
-  }
-
-  .chip.active {
-    background: rgba(214, 211, 209, 0.10);
-    border-color: rgba(214, 211, 209, 0.35);
-    color: #f5f5f4;
-  }
-
-  /* ── Textarea ─────────────────────── */
-
-  .textarea-wrap {
-    position: relative;
-  }
-
-  textarea {
-    width: 100%;
-    padding: 12px 14px;
-    padding-bottom: 36px;
-    border: 1px solid #3a3a3a;
-    background: #202020;
-    color: #eeeeee;
-    border-radius: 10px;
-    resize: vertical;
-    font-family: inherit;
-    font-size: 13.5px;
-    line-height: 1.55;
-    min-height: 110px;
-    transition: border-color 0.12s ease;
-  }
-
-  textarea::placeholder {
-    color: #5f5f5f;
-  }
-
-  textarea:focus {
-    outline: none;
-    border-color: #d6d3d1;
-    box-shadow: 0 0 0 3px rgba(214, 211, 209, 0.08);
-  }
-
-  .textarea-footer {
-    position: absolute;
-    bottom: 8px;
-    left: 14px;
-    right: 14px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .char-count {
-    font-size: 10.5px;
-    color: #5f5f5f;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .kbd-hint {
-    display: flex;
-    gap: 3px;
-  }
-
-  kbd {
-    font-family: inherit;
-    font-size: 10px;
-    padding: 1px 5px;
-    background: #3a3a3a;
-    color: #787878;
-    border-radius: 4px;
-    border: 1px solid #5f5f5f;
-    font-weight: 500;
-  }
-
-  /* ── Toggle ───────────────────────── */
-
-  .toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-  }
-
-  .toggle-track {
-    position: relative;
-    width: 32px;
-    height: 18px;
-    background: #3a3a3a;
-    border-radius: 99px;
-    transition: background 0.15s ease;
-  }
-
-  .toggle-track input {
-    position: absolute;
-    opacity: 0;
-    width: 100%;
-    height: 100%;
-    cursor: pointer;
-    z-index: 1;
-  }
-
-  .toggle-thumb {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 14px;
-    height: 14px;
-    background: #787878;
-    border-radius: 99px;
-    transition: all 0.15s ease;
-  }
-
-  .toggle-track.on {
-    background: #a8a29e;
-  }
-
-  .toggle-track.on .toggle-thumb {
-    left: 16px;
-    background: #ffffff;
-  }
-
-  .toggle-label {
-    font-size: 12.5px;
-    color: #9a9a9a;
-    font-weight: 500;
-  }
-
-  /* ── Buttons ──────────────────────── */
-
-  .btn-primary {
-    padding: 8px 20px;
-    background: #d6d3d1;
-    color: #171717;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-    transition: all 0.12s ease;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    background: #f5f5f4;
-  }
-
-  .btn-primary:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-
-  .btn-primary:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-  }
-
-  .btn-secondary {
-    padding: 7px 13px;
-    background: #202020;
-    color: #bebebe;
-    border: 1px solid #3a3a3a;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 550;
-    white-space: nowrap;
-    transition: all 0.12s ease;
-  }
-
-  .btn-secondary:hover {
-    background: #3a3a3a;
-    color: #eeeeee;
-  }
-
-  .btn-ghost {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 10px;
-    background: transparent;
-    color: #9a9a9a;
-    border: 1px solid #3a3a3a;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 500;
-    transition: all 0.12s ease;
-  }
-
-  .btn-ghost:hover {
-    color: #bebebe;
-    border-color: #5f5f5f;
-    background: #202020;
-  }
-
-  .btn-ghost.copied {
-    color: #f5f5f4;
-    border-color: rgba(214, 211, 209, 0.30);
-    background: rgba(214, 211, 209, 0.08);
-  }
-
-  .spinner {
-    width: 14px;
-    height: 14px;
-    border: 2px solid rgba(2, 44, 34, 0.3);
-    border-top-color: #171717;
-    border-radius: 50%;
-    animation: spin 0.55s linear infinite;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  /* ── Error ────────────────────────── */
-
-  .alert-error {
-    padding: 10px 14px;
-    background: rgba(184, 92, 92, 0.10);
-    border: 1px solid rgba(184, 92, 92, 0.22);
-    color: #d08c8c;
-    border-radius: 10px;
-    font-size: 12.5px;
-    line-height: 1.45;
-  }
-
-  /* ── Result ───────────────────────── */
-
-  .result {
-    background: #171717;
-    border: 1px solid #2a2a2a;
-    border-radius: 12px;
-    overflow: hidden;
-    animation: slideUp 0.25s ease;
-  }
-
-  @keyframes slideUp {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .result-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 16px;
-    border-bottom: 1px solid #2a2a2a;
-  }
-
-  .result-bar-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: #9a9a9a;
-    font-weight: 500;
-  }
-
-  .result-dot {
-    width: 7px;
-    height: 7px;
-    background: #d6d3d1;
-    border-radius: 50%;
-  }
-
-  .result-stale {
-    font-size: 10.5px;
-    color: #c4a46b;
-    border: 1px solid rgba(196, 164, 107, 0.25);
-    background: rgba(196, 164, 107, 0.10);
-    padding: 2px 6px;
-    border-radius: 999px;
-  }
-
-  .result-body {
-    padding: 16px;
-    margin: 0;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    font-family: "SF Mono", "Fira Code", "JetBrains Mono", ui-monospace, monospace;
-    font-size: 12.5px;
-    line-height: 1.7;
-    color: #dedede;
-    max-height: 380px;
-    overflow-y: auto;
-    background: transparent;
+  .workspace { display: flex; flex-direction: column; gap: 16px; }
+
+  .intro { text-align: center; margin-bottom: 4px; }
+  .intro p { color: #777a80; font-size: 10px; font-weight: 750; letter-spacing: 1.15px; text-transform: uppercase; }
+  .intro h1 { margin-top: 8px; color: #f2f1ee; font-size: 29px; font-weight: 650; letter-spacing: -0.9px; }
+
+  .setup-alert,
+  .error-alert { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 13px; border: 1px solid rgba(196, 164, 107, 0.24); border-radius: 10px; background: rgba(196, 164, 107, 0.08); }
+  .setup-alert div { display: grid; gap: 3px; }
+  .setup-alert strong { color: #e1d3b8; font-size: 12px; }
+  .setup-alert span { color: #9b8e77; font-size: 10.5px; }
+  .setup-alert button,
+  .error-alert button { flex-shrink: 0; padding: 6px 9px; border: 1px solid #464137; border-radius: 7px; background: transparent; color: #d1bea0; cursor: pointer; font-size: 10.5px; }
+
+  .composer { border: 1px solid #36383e; border-radius: 14px; overflow: hidden; background: rgba(23, 24, 29, 0.94); box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28); transition: border-color 0.15s ease; }
+  .composer:focus-within { border-color: #55575d; }
+  .composer-top { height: 42px; padding: 0 11px 0 13px; border-bottom: 1px solid #292b30; display: flex; align-items: center; justify-content: space-between; }
+
+  .mode-switch { padding: 2px; border-radius: 7px; display: flex; gap: 2px; background: #202126; }
+  .mode-switch button { padding: 5px 9px; border: 0; border-radius: 5px; background: transparent; color: #6f7279; cursor: pointer; font-size: 10.5px; font-weight: 600; }
+  .mode-switch button.active { background: #34363c; color: #ecebea; }
+
+  .template-button { display: flex; align-items: center; gap: 6px; padding: 6px 7px; border: 0; background: transparent; color: #777a80; cursor: pointer; font-size: 10.5px; }
+  .template-button:hover { color: #c6c4c0; }
+
+  textarea { box-sizing: border-box; width: 100%; min-height: 168px; padding: 19px 20px; border: 0; resize: vertical; outline: 0; background: transparent; color: #f0efec; font-family: inherit; font-size: 14.5px; line-height: 1.55; }
+  textarea::placeholder { color: #55585e; }
+
+  .style-row { padding: 9px 12px; border-top: 1px solid #292b30; display: flex; align-items: flex-start; gap: 9px; }
+  .style-row > span { padding-top: 5px; color: #666970; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  .style-row div { display: flex; flex-wrap: wrap; gap: 4px; }
+  .style-row button { padding: 4px 7px; border: 1px solid #303238; border-radius: 5px; background: transparent; color: #73767d; cursor: pointer; font-size: 9.5px; }
+  .style-row button.active { border-color: #5b5d62; background: #303238; color: #e4e2de; }
+
+  .composer-controls { min-height: 54px; padding: 9px 10px; border-top: 1px solid #2c2e34; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .control-group { min-width: 0; display: flex; align-items: center; gap: 6px; }
+
+  .target-select { position: relative; max-width: 230px; padding: 5px 8px; border-radius: 7px; display: flex; align-items: center; gap: 7px; color: #6f7279; cursor: pointer; }
+  .target-select:hover { background: #202126; }
+  .target-select span { font-size: 9px; }
+  .target-select strong { overflow: hidden; color: #bab8b4; font-size: 10.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .target-select svg { flex-shrink: 0; }
+  .target-select select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+
+  .memory-toggle { padding: 6px 8px; border-radius: 7px; color: #686b72; cursor: pointer; font-size: 9.5px; }
+  .memory-toggle:hover { background: #202126; }
+  .memory-toggle.on { background: rgba(214, 211, 209, 0.08); color: #c6c4c0; }
+  .memory-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+  .char-count { color: #51545a; font-size: 9px; font-variant-numeric: tabular-nums; }
+
+  .enhance-button { min-width: 116px; padding: 9px 14px; border: 0; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 7px; background: #e4e1dc; color: #171719; cursor: pointer; font-size: 11.5px; font-weight: 700; transition: 0.12s ease; }
+  .enhance-button:hover:not(:disabled) { background: #f5f3ef; }
+  .enhance-button:active:not(:disabled) { transform: scale(0.98); }
+  .enhance-button:disabled { opacity: 0.35; cursor: not-allowed; }
+  .enhance-button kbd { color: #77746f; font-size: 9px; font-weight: 600; }
+  .spinner { width: 12px; height: 12px; border: 2px solid rgba(23, 23, 25, 0.25); border-top-color: #171719; border-radius: 50%; animation: spin 0.55s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hotkey-hint { color: #686b72; text-align: center; font-size: 10px; }
+  .hotkey-hint kbd { margin: 0 3px; padding: 2px 5px; border: 1px solid #35373c; border-radius: 5px; background: #1d1f23; color: #aaa8a4; font-size: 9px; }
+
+  .readiness { padding: 9px 4px; border-top: 1px solid #25272c; border-bottom: 1px solid #25272c; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; color: #696c72; font-size: 9.5px; }
+  .readiness strong { color: #98b8a3; font-weight: 600; }
+  .readiness.problem strong { color: #c4a46b; }
+  .status-dot { width: 5px; height: 5px; border-radius: 50%; background: #78a989; }
+  .problem .status-dot { background: #c4a46b; }
+  .separator { color: #3f4248; }
+  .readiness button { margin-left: 4px; border: 0; background: transparent; color: #95979d; cursor: pointer; font-size: 9.5px; text-decoration: underline; text-underline-offset: 2px; }
+  .readiness button:hover { color: #d0ceca; }
+
+  .error-alert { border-color: rgba(184, 92, 92, 0.22); background: rgba(184, 92, 92, 0.09); color: #d08c8c; font-size: 11.5px; line-height: 1.4; }
+  .error-alert button { border-color: rgba(184, 92, 92, 0.3); color: #d08c8c; }
+
+  .result { border: 1px solid #2d2f34; border-radius: 12px; overflow: hidden; background: #17181c; animation: slide-up 0.2s ease; }
+  @keyframes slide-up { from { opacity: 0; transform: translateY(5px); } }
+  .result header { padding: 9px 12px; border-bottom: 1px solid #292b30; display: flex; align-items: center; justify-content: space-between; color: #8b8e94; font-size: 10.5px; }
+  .result header div { display: flex; align-items: center; gap: 7px; }
+  .result-dot { width: 6px; height: 6px; border-radius: 50%; background: #d6d3d1; }
+  .result em { padding: 2px 6px; border-radius: 999px; background: rgba(196, 164, 107, 0.1); color: #c4a46b; font-size: 9px; font-style: normal; }
+  .result header button { padding: 5px 8px; border: 1px solid #36383e; border-radius: 6px; display: flex; align-items: center; gap: 5px; background: transparent; color: #999b9f; cursor: pointer; font-size: 10px; }
+  .result header button:hover,
+  .result header button.copied { background: #24262b; color: #e0dedb; }
+  .result pre { max-height: 360px; overflow-y: auto; padding: 15px; white-space: pre-wrap; word-wrap: break-word; color: #d8d6d2; font-family: "SF Mono", "Fira Code", ui-monospace, monospace; font-size: 11.5px; line-height: 1.65; }
+
+  .recents { margin-top: 18px; }
+  .recents > header { padding: 0 3px 8px; display: flex; align-items: center; justify-content: space-between; }
+  .recents > header strong { color: #989aa0; font-size: 10px; font-weight: 600; }
+  .recents > header button { border: 0; background: transparent; color: #6f7279; cursor: pointer; font-size: 9.5px; }
+  .recents > header button:hover { color: #aaa; }
+  .recent-list { border-bottom: 1px solid #27292e; }
+  .recent-item { width: 100%; padding: 9px 7px; border: 0; border-top: 1px solid #27292e; display: grid; grid-template-columns: 28px minmax(0, 1fr) 70px 18px; align-items: center; gap: 9px; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+  .recent-item:hover { background: rgba(255, 255, 255, 0.018); }
+  .target-mark { width: 26px; height: 26px; border-radius: 6px; display: grid; place-items: center; background: #24262b; color: #aaa8a4; font-size: 8px; font-weight: 750; }
+  .recent-prompt { overflow: hidden; color: #b6b4b0; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+  .recent-item small { color: #61646b; font-size: 9px; text-align: right; }
+  .recent-item svg { color: #676a70; }
+
+  @media (max-width: 580px) {
+    .intro h1 { font-size: 24px; }
+    .composer-controls { align-items: stretch; flex-direction: column; }
+    .control-group { justify-content: space-between; }
+    .enhance-button { width: 100%; }
+    .readiness span:nth-of-type(n + 4) { display: none; }
+    .recent-item { grid-template-columns: 28px minmax(0, 1fr) 18px; }
+    .recent-item small { display: none; }
   }
 </style>
