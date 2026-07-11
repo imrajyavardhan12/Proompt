@@ -9,12 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::platform::{EnhanceType, Platform};
 
-fn sampling_temperature(platform: Platform) -> Option<f32> {
-    matches!(
-        platform,
-        Platform::ClaudeCode | Platform::Cursor | Platform::Codex | Platform::CodingAgent
-    )
-    .then_some(0.2)
+fn sampling_temperature(platform: Platform, enhancement_type: EnhanceType) -> Option<f32> {
+    (enhancement_type == EnhanceType::Text && platform.is_text_platform()).then_some(0.2)
 }
 
 fn build_changes_summary(
@@ -123,7 +119,7 @@ pub async fn enhance(
         system_prompt,
         user_prompt,
         max_tokens: request.options.max_tokens.unwrap_or(2048),
-        temperature: sampling_temperature(request.platform),
+        temperature: sampling_temperature(request.platform, request.enhancement_type),
     };
 
     let provider = crate::config::normalize_provider(provider)
@@ -203,7 +199,7 @@ pub async fn enhance_stream(
         system_prompt,
         user_prompt,
         max_tokens: request.options.max_tokens.unwrap_or(2048),
-        temperature: sampling_temperature(request.platform),
+        temperature: sampling_temperature(request.platform, request.enhancement_type),
     };
 
     let provider = crate::config::normalize_provider(provider)
@@ -257,13 +253,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn coding_agent_sampling_is_low_variance_without_affecting_other_targets() {
-        assert_eq!(sampling_temperature(Platform::ClaudeCode), Some(0.2));
-        assert_eq!(sampling_temperature(Platform::Cursor), Some(0.2));
-        assert_eq!(sampling_temperature(Platform::Codex), Some(0.2));
-        assert_eq!(sampling_temperature(Platform::CodingAgent), Some(0.2));
-        assert_eq!(sampling_temperature(Platform::Claude), None);
-        assert_eq!(sampling_temperature(Platform::Midjourney), None);
+    fn text_enhancement_sampling_is_low_variance_without_affecting_images() {
+        for platform in [
+            Platform::Claude,
+            Platform::OpenAI,
+            Platform::Gemini,
+            Platform::Generic,
+            Platform::ClaudeCode,
+            Platform::Cursor,
+            Platform::Codex,
+            Platform::CodingAgent,
+        ] {
+            assert_eq!(sampling_temperature(platform, EnhanceType::Text), Some(0.2));
+        }
+
+        assert_eq!(
+            sampling_temperature(Platform::Midjourney, EnhanceType::Image),
+            None
+        );
+        assert_eq!(
+            sampling_temperature(Platform::Generic, EnhanceType::Image),
+            None
+        );
     }
 
     #[tokio::test]
