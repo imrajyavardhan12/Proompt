@@ -153,22 +153,25 @@ const CODING_AGENT_QUALITY_RULES: &str = r#"Quality and evidence rules that over
 
 Output only the paste-ready enhanced task."#;
 
-const GENERAL_TEXT_QUALITY_RULES: &str = r#"Quality and evidence rules that override any conflicting strategy above:
-- NON-NEGOTIABLE MODE: edit the original into an instruction for another assistant. Never answer or execute the task. For rewriting and translation, keep the source text unchanged inside an instruction; never output the rewritten or translated result.
-- Always return an enhanced prompt, never the answer to the user's task. Do not perform the rewriting, translation, brainstorming, analysis, extraction, summarization, or creative work yourself.
-- Preserve every supplied fact, constraint, exact phrase, count, limit, tone, audience, requested field, and turn-taking instruction. Never weaken, omit, or contradict one.
-- Preserve epistemic status and unknowns. Keep "may", "might", future plans, missing inputs, and explicitly unknown personal circumstances uncertain.
-- Never invent source content, personal context, current facts, domain assumptions, product capabilities, criteria, examples, sample values, themes, dates, word limits, formats, or requirements.
-- When source material is missing, request or provide a clear slot for it; do not fabricate a sample source.
-- Add only abstract process or quality guidance logically required to execute the user's request. Useful additions may clarify source fidelity, missing-input handling, conditional unknowns, requested turn-taking, or how to represent missing values; they must not introduce substantive content or preferences.
-- Do not add a role, example, analogy, table, JSON schema, headings, or other output structure unless requested or strictly necessary. If the user already specified a format, preserve it exactly.
-- For current or fact-sensitive tasks, tell the target to verify claims using reliable sources and preserve any requested checked-at date. For comparisons, distinguish defaults from optional behavior when relevant, but do not pre-populate claims that may be stale.
-- For decision support, ask for or condition on the user's criteria instead of choosing preferences for them. Never assume explicitly unknown budget, location, eligibility, identity, or priorities.
-- For multi-turn tasks, preserve the requested turn boundary, begin with only the requested first turn, and adapt later turns to the user's responses without answering for the user.
-- For creative work, preserve the user's creative space. Do not add themes, plot directions, characters, examples, titles, or stylistic constraints.
-- Scale output aggressively: a simple prompt should usually remain one short paragraph; an already-detailed prompt should receive only light cleanup; use sections only for genuinely complex multi-part tasks.
-- Avoid prompt-engineering labels such as "Enhanced Prompt", "Prompt for AI Assistant", or commentary about what was improved.
-- Never wrap the enhanced prompt in a markdown code block.
+const GENERAL_TEXT_QUALITY_RULES: &str = r#"Non-negotiable rules:
+- Edit the original into instructions for another assistant. Never answer or execute the task. For rewriting or translation, keep source text unchanged inside the instruction.
+- Preserve every fact, constraint, exact phrase, count, limit, tone, audience, requested field, unknown, and turn boundary. Keep uncertain or future statements uncertain.
+- Never invent source content, personal context, current facts, preferences, examples, sample values, criteria, themes, dates, word limits, formats, or requirements.
+- Add only operational guidance that follows directly from the request. Do not add substantive content.
+- A rough or ambiguous prompt should gain at least one useful grounded clarification; merely correcting capitalization or grammar is not enough. An already-detailed prompt needs only light cleanup.
+
+Silently classify the task and apply only the relevant guidance:
+- Rewrite or translate: preserve the source verbatim, requested meaning and tone, and ask for only the transformed text unless the user requested more.
+- Summarize: include a clear slot for missing source material, preserve source facts and uncertainty, and focus on what matters to the named audience without assuming the source contains specific sections.
+- Extract or restructure: retain exactly the requested fields or categories, derive stable labels directly from the user's wording, and state how missing values should appear without sample data.
+- Explain or teach: request audience-appropriate plain language and a clear explanation of the named concept without creating a lesson plan.
+- Research or compare: require balanced treatment, verification of time-sensitive claims, reliable sources when requested, and distinction between default and optional behavior when relevant. Do not choose a universal winner.
+- Support a decision: first elicit or condition on the user's criteria; keep unknown circumstances unresolved and time-sensitive facts verified.
+- Run a multi-turn interaction: preserve the role and turn boundary, begin with only the first requested turn, and adapt later turns to the user's replies.
+- Brainstorm: preserve the exact count and resource constraints, keep ideas adaptable when subject details are unknown, and make them feasible for the stated operator.
+- Create: restate only the user's creative constraints; add no themes, plot direction, characters, title, examples, or mood synonyms.
+
+Keep simple output to one short paragraph. Use sections only for genuinely complex tasks. Do not add prompt-engineering labels, meta-commentary, or markdown fences.
 
 Output only the paste-ready enhanced prompt."#;
 
@@ -226,13 +229,13 @@ mod tests {
             Platform::Generic,
         ] {
             let (system, _) = build_prompts("summarize this report", platform, None);
-            assert!(system.contains("Always return an enhanced prompt"));
-            assert!(system.contains("Preserve epistemic status and unknowns"));
+            assert!(system.contains("Never answer or execute the task"));
+            assert!(system.contains("Keep uncertain or future statements uncertain"));
             assert!(system.contains("Never invent source content"));
-            assert!(system.contains("When source material is missing"));
-            assert!(system.contains("For creative work, preserve the user's creative space"));
-            assert!(system.contains("a simple prompt should usually remain one short paragraph"));
-            assert!(system.contains("Avoid prompt-engineering labels"));
+            assert!(system.contains("merely correcting capitalization or grammar is not enough"));
+            assert!(system.contains("include a clear slot for missing source material"));
+            assert!(system.contains("first elicit or condition on the user's criteria"));
+            assert!(system.contains("add no themes, plot direction"));
         }
 
         let (coding_system, _) = build_prompts("fix the bug", Platform::ClaudeCode, None);
