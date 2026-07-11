@@ -14,6 +14,7 @@ Versioned corpora:
 
 - `evals/coding-agent-cases.json` — coding-agent tasks
 - `evals/general-text-cases.json` — rewriting, summarization, translation, education, research, decision support, roleplay, creative writing, brainstorming, and structured transformation
+- `evals/image-prompt-cases.json` — image prompts for Midjourney, DALL-E, Stable Diffusion, and generic generators
 
 The general-text category coverage was informed by the CC0 prompt collection at [prompts.chat](https://github.com/f/prompts.chat). Proompt's evaluation cases are curated, purpose-written rough inputs rather than a wholesale copy of community prompts.
 
@@ -22,6 +23,7 @@ The general-text category coverage was informed by the CC0 prompt collection at 
 ```bash
 cargo run -p proompt-evals -- validate
 cargo run -p proompt-evals -- validate --corpus evals/general-text-cases.json
+cargo run -p proompt-evals -- validate --corpus evals/image-prompt-cases.json
 ```
 
 Validation is offline and makes no provider calls.
@@ -38,6 +40,17 @@ cargo run -p proompt-evals -- capture \
 ```
 
 Capture does not write normal Proompt history and does not request SuperMemory context.
+
+Capture the image-prompt baseline with:
+
+```bash
+cargo run -p proompt-evals -- capture \
+  --corpus evals/image-prompt-cases.json \
+  --output evals/results/v0.3.5-image-baseline.json \
+  --confirm-cost
+```
+
+Image comparisons use the corpus-selected `evals/image-rubric.md` and image-specific scoring dimensions.
 
 Use a subset while developing:
 

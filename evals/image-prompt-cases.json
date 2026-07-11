@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "suite": "image-prompt-core",
+  "description": "Core quality cases for Midjourney, DALL-E, Stable Diffusion, and generic image-prompt enhancement.",
+  "enhancementType": "image",
+  "rubric": "evals/image-rubric.md",
+  "dimensions": [
+    "Intent preservation",
+    "Useful visual specificity",
+    "Target-platform fit",
+    "Composition and constraint control",
+    "Unsupported additions",
+    "Verbosity calibration",
+    "Paste-readiness"
+  ],
+  "cases": [
+    {
+      "id": "exact-three-cups",
+      "category": "count_and_composition",
+      "prompt": "exactly three ceramic cups in a straight row: blue on the left, white in the center, red on the right, plain gray background, no other objects",
+      "platform": "midjourney",
+      "complexity": "constraint_heavy",
+      "expectations": {
+        "preserve": ["Exactly three ceramic cups", "Straight row", "Blue left, white center, red right", "Plain gray background", "No other objects"],
+        "shouldInclude": ["Reinforce exact count and ordering", "Use a composition that keeps all cups clearly visible", "Remain paste-ready for Midjourney"],
+        "mustAvoid": ["Adding a table, hands, flowers, or extra props", "Changing cup colors or order", "Adding conflicting aspect ratios", "Unrequested version or stylize parameters"],
+        "verbosity": "compact"
+      }
+    },
+    {
+      "id": "already-detailed-brutalist-station",
+      "category": "already_detailed",
+      "prompt": "wide establishing photograph of an empty brutalist train station, wet concrete after rain, overcast daylight, muted cool-gray palette, symmetrical composition, no people, no signage, --ar 21:9 --style raw",
+      "platform": "midjourney",
+      "complexity": "already_detailed",
+      "expectations": {
+        "preserve": ["Empty brutalist train station", "Wet concrete after rain", "Overcast daylight", "Muted cool-gray palette", "Symmetry", "No people or signage", "21:9 aspect ratio", "Raw style"],
+        "shouldInclude": ["Light cleanup only", "Keep supplied Midjourney parameters once"],
+        "mustAvoid": ["Adding people, trains, text, neon, or golden-hour light", "Changing the aspect ratio", "Duplicating parameters", "Adding a model version or stylize value"],
+        "verbosity": "compact"
+      }
+    },
+    {
+      "id": "quiet-midnight-library",
+      "category": "open_ended_scene",
+      "prompt": "a quiet library at midnight",
+      "platform": "midjourney",
+      "complexity": "simple",
+      "expectations": {
+        "preserve": ["Quiet library", "Midnight setting"],
+        "shouldInclude": ["Add coherent visual atmosphere", "Clarify lighting and composition without overcommitting", "Use Midjourney-friendly concise descriptors"],
+        "mustAvoid": ["Inventing people or a narrative event", "Adding horror elements", "Named artists", "Arbitrary technical parameters presented as user requirements"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "nova-bottle-product-shot",
+      "category": "product_typography",
+      "prompt": "studio product photo of one matte black water bottle on a seamless white background. the bottle label must read exactly NOVA in uppercase. centered, soft shadow, no hands, no extra products",
+      "platform": "dalle",
+      "complexity": "constraint_heavy",
+      "expectations": {
+        "preserve": ["One matte black water bottle", "Seamless white background", "Exact uppercase label NOVA", "Centered composition", "Soft shadow", "No hands or extra products"],
+        "shouldInclude": ["Make exact label text prominent", "Use clear natural-language product photography instructions"],
+        "mustAvoid": ["Changing or decorating the label text", "Adding a logo or brand story", "Adding props, people, or additional bottles", "Changing the background color"],
+        "verbosity": "compact"
+      }
+    },
+    {
+      "id": "nonliteral-climate-anxiety",
+      "category": "editorial_concept",
+      "prompt": "editorial illustration about climate anxiety, thoughtful and nonliteral, no disaster scenes, no text",
+      "platform": "dalle",
+      "complexity": "ambiguous",
+      "expectations": {
+        "preserve": ["Editorial illustration", "Climate anxiety", "Thoughtful and nonliteral treatment", "No disaster scenes", "No text"],
+        "shouldInclude": ["Add a coherent symbolic visual direction", "Preserve restraint and editorial tone"],
+        "mustAvoid": ["Wildfires, floods, ruined cities, or other disaster imagery", "Typography or captions", "A named artist", "Turning the concept into a cheerful climate campaign"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "historical-printing-workshop",
+      "category": "historical_scene",
+      "prompt": "a 15th-century European printing workshop, workers operating an early wooden press, documentary realism, historically plausible tools and clothing, no modern objects",
+      "platform": "dalle",
+      "complexity": "fact_sensitive",
+      "expectations": {
+        "preserve": ["15th-century European printing workshop", "Workers using an early wooden press", "Documentary realism", "Historically plausible tools and clothing", "No modern objects"],
+        "shouldInclude": ["Request grounded period detail", "Keep the scene observational rather than fantastical"],
+        "mustAvoid": ["Modern machinery, electric lighting, plastic, or contemporary clothing", "Inventing a named historical person", "Fantasy or steampunk styling", "Named artists"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "sd-natural-portrait",
+      "category": "portrait",
+      "prompt": "natural-light portrait of an elderly woman with silver hair and freckles, looking directly at camera, neutral linen background, realistic skin texture, no beauty retouching",
+      "platform": "stablediffusion",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["Elderly woman", "Silver hair and freckles", "Direct eye contact", "Natural light", "Neutral linen background", "Realistic skin", "No beauty retouching"],
+        "shouldInclude": ["Use Stable Diffusion-friendly positive and negative prompting", "Keep facial detail natural", "Use portrait composition"],
+        "mustAvoid": ["Making the subject young", "Glamour makeup or airbrushed skin", "Changing eye direction", "Excessive weighting or unrelated quality spam"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "sd-flat-leaf-icon",
+      "category": "graphic_design",
+      "prompt": "minimal flat vector app icon: one white leaf centered on a solid forest-green square, rounded corners, no gradients, no shadows, no text, only green and white",
+      "platform": "stablediffusion",
+      "complexity": "constraint_heavy",
+      "expectations": {
+        "preserve": ["One centered white leaf", "Solid forest-green rounded square", "Flat vector style", "Only green and white", "No gradients, shadows, or text"],
+        "shouldInclude": ["Reinforce simple geometry and clean edges", "Use negatives compatible with flat graphic design"],
+        "mustAvoid": ["Photorealism, 8K photography, volumetric lighting, or depth of field", "Extra leaves", "Additional colors", "Generic anatomy negatives unrelated to an icon"],
+        "verbosity": "compact"
+      }
+    },
+    {
+      "id": "sd-six-fingered-glove",
+      "category": "unusual_anatomy",
+      "prompt": "close-up of a red leather glove designed with exactly six fingers, displayed alone on a black pedestal, dramatic museum lighting",
+      "platform": "stablediffusion",
+      "complexity": "edge_case",
+      "expectations": {
+        "preserve": ["Red leather glove", "Exactly six fingers by design", "Glove displayed alone", "Black pedestal", "Dramatic museum lighting"],
+        "shouldInclude": ["Emphasize intentional six-finger construction", "Avoid negative prompts that contradict the requested anatomy"],
+        "mustAvoid": ["Negative terms such as extra fingers or bad anatomy", "Changing to five fingers", "Adding a hand or person", "Adding other exhibit objects"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "watercolor-lighthouse-book",
+      "category": "childrens_illustration",
+      "prompt": "gentle watercolor illustration for a children's book: a small lighthouse guiding two paper boats through fog, warm and reassuring, no text",
+      "platform": "generic",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["Gentle watercolor children's-book illustration", "Small lighthouse", "Exactly two paper boats", "Fog", "Warm reassuring mood", "No text"],
+        "shouldInclude": ["Add coherent color, light, and composition detail", "Keep the visual age-appropriate"],
+        "mustAvoid": ["Named illustrators or copyrighted characters", "Adding people or animals", "Changing the boat count", "Storm, danger, or ominous mood"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "abstract-collaboration-metaphor",
+      "category": "abstract_concept",
+      "prompt": "abstract image representing collaboration without using people, hands, puzzle pieces, gears, or text. calm blue and amber palette",
+      "platform": "generic",
+      "complexity": "constraint_heavy",
+      "expectations": {
+        "preserve": ["Abstract representation of collaboration", "No people, hands, puzzle pieces, gears, or text", "Calm blue and amber palette"],
+        "shouldInclude": ["Develop a nonliteral visual system that suggests connection", "Clarify balanced composition and calm atmosphere"],
+        "mustAvoid": ["Any prohibited symbol", "Logos or typography", "Adding a named art movement or artist", "Changing to a high-energy mood"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "rainy-cafe-cinematic",
+      "category": "style_preservation",
+      "prompt": "cinematic photograph from inside a quiet cafe on a rainy evening, looking through the window at blurred city lights, one untouched cup in the foreground, intimate mood, no visible people",
+      "platform": "midjourney",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["View from inside a quiet cafe", "Rainy evening", "Looking through window at blurred city lights", "Exactly one untouched cup in foreground", "Intimate cinematic mood", "No visible people"],
+        "shouldInclude": ["Strengthen depth, reflections, and framing", "Keep the supplied cinematic photographic style"],
+        "mustAvoid": ["Adding a person, multiple cups, food, or readable signs", "Changing time or weather", "Adding anime, painting, or unrelated style keywords", "Conflicting aspect-ratio or version parameters"],
+        "verbosity": "moderate"
+      }
+    }
+  ]
+}

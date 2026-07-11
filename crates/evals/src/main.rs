@@ -17,6 +17,16 @@ use proompt_core::{
 use serde::{Deserialize, Serialize};
 
 const DEFAULT_CORPUS: &str = "evals/coding-agent-cases.json";
+const DEFAULT_RUBRIC: &str = "evals/rubric.md";
+const DEFAULT_DIMENSIONS: [&str; 7] = [
+    "Intent preservation",
+    "Useful specificity",
+    "Target-platform fit",
+    "Execution readiness",
+    "Scope control and safety",
+    "Verbosity calibration",
+    "Paste-readiness",
+];
 
 #[derive(Debug, Parser)]
 #[command(
@@ -84,7 +94,30 @@ struct EvalCorpus {
     schema_version: u32,
     suite: String,
     description: String,
+    #[serde(default)]
+    enhancement_type: Option<EnhanceType>,
+    #[serde(default)]
+    rubric: Option<String>,
+    #[serde(default)]
+    dimensions: Option<Vec<String>>,
     cases: Vec<EvalCase>,
+}
+
+impl EvalCorpus {
+    fn enhancement_type(&self) -> EnhanceType {
+        self.enhancement_type.unwrap_or(EnhanceType::Text)
+    }
+
+    fn rubric(&self) -> &str {
+        self.rubric.as_deref().unwrap_or(DEFAULT_RUBRIC)
+    }
+
+    fn dimensions(&self) -> Vec<&str> {
+        self.dimensions
+            .as_ref()
+            .map(|dimensions| dimensions.iter().map(String::as_str).collect())
+            .unwrap_or_else(|| DEFAULT_DIMENSIONS.to_vec())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -119,6 +152,8 @@ struct EvalRun {
     git_dirty: Option<bool>,
     provider: String,
     model: String,
+    #[serde(default)]
+    enhancement_type: Option<EnhanceType>,
     results: Vec<EvalResult>,
 }
 
@@ -256,7 +291,8 @@ fn compare(
     writeln!(review)?;
     writeln!(
         review,
-        "Do not open the separate answer key until every case has a decision. Score with `evals/rubric.md`."
+        "Do not open the separate answer key until every case has a decision. Score with `{}`.",
+        corpus.rubric()
     )?;
 
     let mut candidate_labels = BTreeMap::new();
@@ -306,15 +342,7 @@ fn compare(
         writeln!(review)?;
         writeln!(review, "| Dimension | A (1–5) | B (1–5) |")?;
         writeln!(review, "| --- | ---: | ---: |")?;
-        for dimension in [
-            "Intent preservation",
-            "Useful specificity",
-            "Target-platform fit",
-            "Execution readiness",
-            "Scope control and safety",
-            "Verbosity calibration",
-            "Paste-readiness",
-        ] {
+        for dimension in corpus.dimensions() {
             writeln!(review, "| {} |  |  |", dimension)?;
         }
         writeln!(review)?;
@@ -361,6 +389,12 @@ fn validate_comparable_runs(
             candidate.provider,
             candidate.model
         );
+    }
+    let expected_type = corpus.enhancement_type();
+    for (label, run) in [("baseline", baseline), ("candidate", candidate)] {
+        if run.enhancement_type.unwrap_or(EnhanceType::Text) != expected_type {
+            anyhow::bail!("{} run enhancement type does not match the corpus", label);
+        }
     }
 
     let expected_ids = corpus
@@ -445,9 +479,10 @@ async fn capture(
     let corpus = load_corpus(corpus_path)?;
     validate_corpus(&corpus)?;
     let selected = select_cases(&corpus, case_ids, limit)?;
+    let enhancement_type = corpus.enhancement_type();
     let config = config::load_config()?;
 
-    let first_input = configured_request(selected[0]);
+    let first_input = configured_request(selected[0], enhancement_type);
     let prepared = prepare_enhancement(&config, &first_input)?;
     eprintln!(
         "Capturing {} '{}' cases via {} / {}...",
@@ -461,7 +496,9 @@ async fn capture(
     for (index, case) in selected.iter().enumerate() {
         eprintln!("[{}/{}] {}", index + 1, selected.len(), case.id);
         let started = Instant::now();
-        let response = enhance_with_loaded_config(configured_request(case), config.clone()).await;
+        let response =
+            enhance_with_loaded_config(configured_request(case, enhancement_type), config.clone())
+                .await;
         let latency_ms = duration_ms(started.elapsed());
 
         let result = match response {
@@ -503,6 +540,7 @@ async fn capture(
         git_dirty: git_dirty(),
         provider: prepared.provider,
         model: prepared.model,
+        enhancement_type: Some(enhancement_type),
         results,
     };
 
@@ -535,11 +573,11 @@ async fn capture(
     Ok(())
 }
 
-fn configured_request(case: &EvalCase) -> ConfiguredEnhanceRequest {
+fn configured_request(case: &EvalCase, enhancement_type: EnhanceType) -> ConfiguredEnhanceRequest {
     ConfiguredEnhanceRequest {
         prompt: case.prompt.clone(),
         platform: Some(case.platform.clone()),
-        enhancement_type: Some(EnhanceType::Text),
+        enhancement_type: Some(enhancement_type),
         include_memory: false,
         style_hints: None,
         max_tokens: None,
@@ -569,7 +607,20 @@ fn validate_corpus(corpus: &EvalCorpus) -> Result<()> {
     if corpus.cases.is_empty() {
         anyhow::bail!("Corpus must include at least one case");
     }
+    if corpus
+        .rubric
+        .as_ref()
+        .is_some_and(|rubric| rubric.trim().is_empty())
+    {
+        anyhow::bail!("Corpus rubric path cannot be empty");
+    }
+    if corpus.dimensions.as_ref().is_some_and(|dimensions| {
+        dimensions.is_empty() || dimensions.iter().any(|item| item.trim().is_empty())
+    }) {
+        anyhow::bail!("Corpus dimensions must be non-empty strings");
+    }
 
+    let enhancement_type = corpus.enhancement_type();
     let mut ids = HashSet::new();
     for case in &corpus.cases {
         if case.id.trim().is_empty() {
@@ -591,8 +642,20 @@ fn validate_corpus(corpus: &EvalCorpus) -> Result<()> {
                 case.platform
             )
         })?;
-        if !platform.is_text_platform() {
-            anyhow::bail!("Case '{}' must use a text platform", case.id);
+        let platform_matches_type = match enhancement_type {
+            EnhanceType::Text => platform.is_text_platform(),
+            EnhanceType::Image => {
+                platform.is_image_platform()
+                    || platform == proompt_core::platform::Platform::Generic
+            }
+        };
+        if !platform_matches_type {
+            anyhow::bail!(
+                "Case '{}' platform '{}' is incompatible with {:?} enhancement",
+                case.id,
+                case.platform,
+                enhancement_type
+            );
         }
         if case.expectations.preserve.is_empty()
             || case.expectations.should_include.is_empty()
@@ -682,7 +745,11 @@ mod tests {
     fn bundled_corpora_are_valid() {
         let repository_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
 
-        for relative_path in [DEFAULT_CORPUS, "evals/general-text-cases.json"] {
+        for relative_path in [
+            DEFAULT_CORPUS,
+            "evals/general-text-cases.json",
+            "evals/image-prompt-cases.json",
+        ] {
             let corpus = load_corpus(&repository_root.join(relative_path)).unwrap();
 
             validate_corpus(&corpus).unwrap();
@@ -741,6 +808,29 @@ mod tests {
     }
 
     #[test]
+    fn image_corpus_accepts_image_platforms_and_rejects_text_platforms() {
+        let mut corpus = sample_corpus();
+        corpus.enhancement_type = Some(EnhanceType::Image);
+        corpus.cases[0].platform = "midjourney".to_string();
+        validate_corpus(&corpus).unwrap();
+
+        corpus.cases[0].platform = "claude".to_string();
+        let error = validate_corpus(&corpus).unwrap_err().to_string();
+        assert!(error.contains("incompatible with Image enhancement"));
+    }
+
+    #[test]
+    fn configured_image_request_preserves_the_enhancement_type() {
+        let mut corpus = sample_corpus();
+        corpus.cases[0].platform = "dalle".to_string();
+
+        let request = configured_request(&corpus.cases[0], EnhanceType::Image);
+
+        assert_eq!(request.enhancement_type, Some(EnhanceType::Image));
+        assert_eq!(request.platform.as_deref(), Some("dalle"));
+    }
+
+    #[test]
     fn comparison_rejects_model_mismatch() {
         let corpus = sample_corpus();
         let baseline = sample_run("model-a");
@@ -764,6 +854,7 @@ mod tests {
             git_dirty: Some(false),
             provider: "provider".to_string(),
             model: model.to_string(),
+            enhancement_type: Some(EnhanceType::Text),
             results: vec![EvalResult {
                 case_id: "sample".to_string(),
                 category: "bug_fix".to_string(),
@@ -782,6 +873,9 @@ mod tests {
             schema_version: 1,
             suite: "sample".to_string(),
             description: "Sample corpus".to_string(),
+            enhancement_type: None,
+            rubric: None,
+            dimensions: None,
             cases: vec![EvalCase {
                 id: "sample".to_string(),
                 category: "bug_fix".to_string(),

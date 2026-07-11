@@ -52,7 +52,7 @@ Score each dimension from 1 to 5.
 
 Mark an output as a critical failure regardless of average score if it:
 
-- changes the requested engineering outcome
+- changes the requested outcome
 - invents repository details, personal context, source content, current facts, commands, or domain rules
 - drops an explicit user constraint
 - asks for unrelated work or materially expands the scope
