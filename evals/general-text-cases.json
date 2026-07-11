@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "suite": "general-text-core",
+  "description": "Core quality cases for Claude, GPT, Gemini, and generic text-assistant enhancement.",
+  "cases": [
+    {
+      "id": "professional-email-rewrite",
+      "category": "rewriting",
+      "prompt": "make this email sound professional but not stiff: hey sam, the numbers are late again and i need them by friday or the launch slips",
+      "platform": "openai",
+      "complexity": "simple",
+      "expectations": {
+        "preserve": ["The email is addressed to Sam", "The numbers are late again", "They are needed by Friday", "A delay risks the launch", "The tone should be professional but not stiff"],
+        "shouldInclude": ["Request a polished rewrite", "Retain the direct deadline and consequence", "Keep the output ready to send"],
+        "mustAvoid": ["Inventing a project name", "Changing Friday to a specific date", "Adding threats or blame", "A long prompt-engineering template"],
+        "verbosity": "compact"
+      }
+    },
+    {
+      "id": "already-clear-executive-summary",
+      "category": "summarization",
+      "prompt": "Summarize the text below in no more than five bullets for an executive audience. Preserve all numbers, distinguish facts from recommendations, and do not add information that is not in the source.",
+      "platform": "claude",
+      "complexity": "already_detailed",
+      "expectations": {
+        "preserve": ["No more than five bullets", "Executive audience", "Preserve all numbers", "Separate facts from recommendations", "Do not add information"],
+        "shouldInclude": ["A clear placeholder or instruction for the source text", "Light organization without changing the request"],
+        "mustAvoid": ["Repeating every constraint multiple times", "Adding an executive-summary preamble", "Inventing source content", "Requiring XML when it adds no value"],
+        "verbosity": "compact"
+      }
+    },
+    {
+      "id": "ambiguous-leadership-summary",
+      "category": "summarization",
+      "prompt": "summarize this report for leadership",
+      "platform": "generic",
+      "complexity": "ambiguous",
+      "expectations": {
+        "preserve": ["Summarize a report", "The audience is leadership"],
+        "shouldInclude": ["Request the report as input", "Prioritize decision-relevant information", "Preserve uncertainty and source facts"],
+        "mustAvoid": ["Inventing the report topic", "Inventing a company or industry", "Choosing an arbitrary word count", "Assuming specific metrics or recommendations"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "tone-preserving-translation",
+      "category": "translation",
+      "prompt": "translate this customer complaint into English, keep it frustrated but polite, and don't soften the refund request: Je suis déçu que ma commande soit encore en retard. Je souhaite un remboursement complet.",
+      "platform": "gemini",
+      "complexity": "simple",
+      "expectations": {
+        "preserve": ["Translate into English", "Keep a frustrated but polite tone", "Do not soften the full-refund request", "The order is still late"],
+        "shouldInclude": ["Request only the translated text", "Preserve meaning and tone"],
+        "mustAvoid": ["Answering the complaint", "Adding customer-service policy", "Changing the requested remedy", "Explaining the translation process"],
+        "verbosity": "compact"
+      }
+    },
+    {
+      "id": "strict-json-extraction",
+      "category": "information_extraction",
+      "prompt": "extract name, company, email, and requested demo date from the text I provide. return valid JSON only. use null when something isn't stated.",
+      "platform": "openai",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["Extract exactly four named fields", "Return valid JSON only", "Use null for missing values"],
+        "shouldInclude": ["Keep source values faithful", "Define stable field names", "Provide a place for the source text"],
+        "mustAvoid": ["Inventing missing values", "Adding markdown fences", "Adding extra fields", "Providing explanatory prose"],
+        "verbosity": "compact"
+      }
+    },
+    {
+      "id": "beginner-concept-explanation",
+      "category": "education",
+      "prompt": "explain compound interest to a 14 year old without equations",
+      "platform": "claude",
+      "complexity": "simple",
+      "expectations": {
+        "preserve": ["Explain compound interest", "Audience is a 14-year-old", "Do not use equations"],
+        "shouldInclude": ["Use age-appropriate plain language", "Explain how growth builds on earlier growth", "Keep the explanation concise"],
+        "mustAvoid": ["Introducing formulas", "Assuming financial knowledge", "Turning the request into a full lesson plan", "Unrequested quizzes or assignments"],
+        "verbosity": "compact"
+      }
+    },
+    {
+      "id": "uncertain-relocation-decision",
+      "category": "decision_support",
+      "prompt": "I may move to either Lisbon or Berlin next year. help me decide but don't assume my budget or visa situation.",
+      "platform": "gemini",
+      "complexity": "ambiguous",
+      "expectations": {
+        "preserve": ["Compare Lisbon and Berlin for a possible move next year", "Do not assume budget", "Do not assume visa situation", "The move is uncertain"],
+        "shouldInclude": ["Ask for or organize personal decision criteria", "Keep unknown factors conditional", "Separate stable considerations from time-sensitive facts"],
+        "mustAvoid": ["Inventing income or citizenship", "Claiming current prices without verification", "Choosing a city for the user", "Treating the move as confirmed"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "current-product-research",
+      "category": "research",
+      "prompt": "compare the current privacy features of Signal, WhatsApp, and Telegram for a nontechnical audience. cite reliable sources and say when the information was checked.",
+      "platform": "gemini",
+      "complexity": "fact_sensitive",
+      "expectations": {
+        "preserve": ["Compare Signal, WhatsApp, and Telegram", "Focus on current privacy features", "Write for a nontechnical audience", "Cite reliable sources", "State when information was checked"],
+        "shouldInclude": ["Distinguish defaults from optional settings", "Verify time-sensitive claims", "Present a balanced comparison"],
+        "mustAvoid": ["Making uncited current claims", "Giving absolute privacy guarantees", "Expanding into unrelated messaging apps", "Assuming one product is best for everyone"],
+        "verbosity": "detailed"
+      }
+    },
+    {
+      "id": "one-question-interview",
+      "category": "multi_turn_roleplay",
+      "prompt": "interview me for a product manager job. ask one question at a time and wait for my answer. don't answer for me.",
+      "platform": "openai",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["Run a product-manager interview", "Ask one question at a time", "Wait for each answer", "Do not answer for the user"],
+        "shouldInclude": ["Stay in interviewer role", "Adapt later questions to the user's answers", "Begin with one question"],
+        "mustAvoid": ["Listing all questions at once", "Providing model answers", "Inventing a company or seniority level", "Adding an unsolicited scoring system"],
+        "verbosity": "compact"
+      }
+    },
+    {
+      "id": "constrained-short-story",
+      "category": "creative_writing",
+      "prompt": "write a hopeful sci-fi story under 300 words, second person, no dialogue, ending with the exact sentence: The signal was never meant for Earth.",
+      "platform": "claude",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["Hopeful science-fiction story", "Under 300 words", "Second-person perspective", "No dialogue", "Exact final sentence"],
+        "shouldInclude": ["Make every constraint explicit once", "Request only the story"],
+        "mustAvoid": ["Changing the final sentence", "Adding a title unless necessary", "Explaining the writing choices", "Expanding the requested length"],
+        "verbosity": "compact"
+      }
+    },
+    {
+      "id": "zero-budget-launch-brainstorm",
+      "category": "brainstorming",
+      "prompt": "give me 10 launch ideas for a solo indie app with zero ad budget. no paid ads and don't assume what the app does.",
+      "platform": "generic",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["Provide exactly 10 launch ideas", "The product is a solo indie app", "There is zero advertising budget", "No paid ads", "The app's purpose is unknown"],
+        "shouldInclude": ["Keep ideas adaptable to different app categories", "Favor actions one person can execute", "Mark where product-specific details are needed"],
+        "mustAvoid": ["Inventing the app category", "Suggesting paid promotion", "Assuming an existing audience", "Adding more than 10 ideas"],
+        "verbosity": "moderate"
+      }
+    },
+    {
+      "id": "meeting-actions-with-unknowns",
+      "category": "structured_transformation",
+      "prompt": "turn these meeting notes into decisions, action items, owners, and deadlines. don't invent owners or dates if they aren't in the notes.",
+      "platform": "claude",
+      "complexity": "medium",
+      "expectations": {
+        "preserve": ["Extract decisions, action items, owners, and deadlines", "Do not invent owners", "Do not invent dates"],
+        "shouldInclude": ["Represent missing owners and deadlines explicitly", "Keep extracted items grounded in the notes", "Provide a clear structured output"],
+        "mustAvoid": ["Assigning work to unnamed people", "Calculating unstated deadlines", "Adding decisions not present in the notes", "Requesting unrelated meeting analysis"],
+        "verbosity": "moderate"
+      }
+    }
+  ]
+}

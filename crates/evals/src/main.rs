@@ -679,14 +679,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bundled_corpus_is_valid() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join(DEFAULT_CORPUS);
-        let corpus = load_corpus(&path).unwrap();
+    fn bundled_corpora_are_valid() {
+        let repository_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
 
-        validate_corpus(&corpus).unwrap();
-        assert!(corpus.cases.len() >= 10);
+        for relative_path in [DEFAULT_CORPUS, "evals/general-text-cases.json"] {
+            let corpus = load_corpus(&repository_root.join(relative_path)).unwrap();
+
+            validate_corpus(&corpus).unwrap();
+            assert!(corpus.cases.len() >= 10);
+        }
     }
 
     #[test]

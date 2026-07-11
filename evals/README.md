@@ -10,10 +10,18 @@ Evaluation order:
 
 Generated outputs belong under `evals/results/` and are ignored by Git. Do not add private prompts, repository content, API keys, or generated result files to the corpus.
 
-## Validate the corpus
+Versioned corpora:
+
+- `evals/coding-agent-cases.json` — coding-agent tasks
+- `evals/general-text-cases.json` — rewriting, summarization, translation, education, research, decision support, roleplay, creative writing, brainstorming, and structured transformation
+
+The general-text category coverage was informed by the CC0 prompt collection at [prompts.chat](https://github.com/f/prompts.chat). Proompt's evaluation cases are curated, purpose-written rough inputs rather than a wholesale copy of community prompts.
+
+## Validate a corpus
 
 ```bash
 cargo run -p proompt-evals -- validate
+cargo run -p proompt-evals -- validate --corpus evals/general-text-cases.json
 ```
 
 Validation is offline and makes no provider calls.
@@ -24,7 +32,8 @@ Capture uses the provider/model in the normal Proompt configuration. It calls th
 
 ```bash
 cargo run -p proompt-evals -- capture \
-  --output evals/results/v0.3.4-coding-baseline.json \
+  --corpus evals/general-text-cases.json \
+  --output evals/results/v0.3.5-general-text-baseline.json \
   --confirm-cost
 ```
 
@@ -34,9 +43,10 @@ Use a subset while developing:
 
 ```bash
 cargo run -p proompt-evals -- capture \
-  --case simple-typo-fix \
-  --case ambiguous-upload-failure \
-  --output evals/results/smoke.json \
+  --corpus evals/general-text-cases.json \
+  --case professional-email-rewrite \
+  --case ambiguous-leadership-summary \
+  --output evals/results/general-text-smoke.json \
   --confirm-cost
 ```
 
@@ -46,9 +56,10 @@ Capture candidate outputs with the same provider/model, then generate a review s
 
 ```bash
 cargo run -p proompt-evals -- compare \
-  --baseline evals/results/v0.3.4-coding-baseline.json \
-  --candidate evals/results/coding-candidate-v1.json \
-  --output evals/results/coding-candidate-v1-review.md
+  --corpus evals/general-text-cases.json \
+  --baseline evals/results/v0.3.5-general-text-baseline.json \
+  --candidate evals/results/general-text-candidate-v1.json \
+  --output evals/results/general-text-candidate-v1-review.md
 ```
 
 Do not open the generated `.key.json` file until every case has been scored.

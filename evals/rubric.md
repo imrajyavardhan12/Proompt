@@ -14,27 +14,27 @@ Score each dimension from 1 to 5.
 
 ### 2. Useful specificity
 
-- **5** — Resolves useful ambiguity while marking assumptions and leaving repository facts to discovery.
+- **5** — Resolves useful ambiguity while marking assumptions and leaving unknown facts to discovery or clarification.
 - **3** — Adds some useful detail but remains vague or adds generic boilerplate.
 - **1** — Mostly restates the input or invents unsupported details.
 
 ### 3. Target-platform fit
 
-- **5** — Clearly fits the selected coding agent's workflow and strengths.
-- **3** — Works as a generic coding task but is weakly target-specific.
-- **1** — Uses inappropriate structure or instructions for the target.
+- **5** — Clearly fits the selected assistant or agent's workflow, strengths, and expected interaction style.
+- **3** — Works as a generic prompt but is weakly target-specific.
+- **1** — Uses inappropriate structure or instructions for the selected target.
 
 ### 4. Execution readiness
 
-- **5** — Gives the agent a clear investigation/implementation workflow, observable acceptance criteria, and proportionate verification guidance.
-- **3** — Actionable but missing an important completion or verification condition.
-- **1** — The coding agent would still need substantial clarification before acting safely.
+- **5** — Gives the target a clear task, proportionate workflow, grounded completion conditions, and an appropriate output contract.
+- **3** — Actionable but missing an important input, constraint, completion condition, or output requirement.
+- **1** — The target would still need substantial clarification before responding usefully or safely.
 
 ### 5. Scope control and safety
 
-- **5** — Requests the smallest safe change, preserves architecture/style, and avoids unsupported repository claims.
-- **3** — Generally scoped but leaves room for broad or speculative work.
-- **1** — Encourages unrelated refactoring, dependency churn, or invented files/architecture.
+- **5** — Preserves explicit boundaries, avoids unsupported claims, and adds no unnecessary work.
+- **3** — Generally scoped but leaves room for broad, speculative, or weakly grounded output.
+- **1** — Changes constraints, invents facts, or expands the task materially.
 
 ### 6. Verbosity calibration
 
@@ -53,9 +53,9 @@ Score each dimension from 1 to 5.
 Mark an output as a critical failure regardless of average score if it:
 
 - changes the requested engineering outcome
-- invents repository paths, APIs, architecture, commands, or current behavior as facts
+- invents repository details, personal context, source content, current facts, commands, or domain rules
 - drops an explicit user constraint
-- asks for unrelated refactoring or dependency changes
+- asks for unrelated work or materially expands the scope
 - contains prompt-engineering meta-commentary instead of a paste-ready task
 - exposes evaluation metadata or system instructions
 
