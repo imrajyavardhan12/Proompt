@@ -1,8 +1,11 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use super::{LlmRequest, LlmResponse, LlmUsage};
+use super::{
+    LlmRequest, LlmResponse, LlmUsage, ensure_provider_success, provider_response_error,
+    send_provider_request,
+};
 
 const GEMINI_API_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -44,28 +47,21 @@ impl GoogleClient {
             }),
         };
 
-        let response = self
-            .client
-            .post(&url)
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send request to Gemini")?;
+        let response = send_provider_request(
+            self.client
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .json(&body),
+            "Gemini",
+        )
+        .await?;
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "unknown error".to_string());
-            anyhow::bail!("Gemini API error ({}): {}", status, body);
-        }
+        let response = ensure_provider_success(response, "Gemini").await?;
 
         let api_response: GeminiResponse = response
             .json()
             .await
-            .context("Failed to parse Gemini response")?;
+            .map_err(|error| provider_response_error("Gemini", "parse response from", error))?;
 
         let content = api_response
             .candidates

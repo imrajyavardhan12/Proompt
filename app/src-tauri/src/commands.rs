@@ -1392,6 +1392,9 @@ fn friendly_quick_enhance_error(message: &str) -> String {
         "Add a provider API key in Settings before using quick enhance.".to_string()
     } else if lower.contains("hosted mode") {
         "Hosted mode is coming soon. Switch to BYOK mode in Settings.".to_string()
+    } else if lower.contains("request timed out") {
+        "The provider did not respond within 60 seconds. Check your connection and try again."
+            .to_string()
     } else {
         message.to_string()
     }
@@ -1408,6 +1411,8 @@ fn diagnostic_quick_enhance_error(message: &str) -> String {
         "provider_api_key_missing".to_string()
     } else if lower.contains("hosted mode") {
         "hosted_mode_unavailable".to_string()
+    } else if lower.contains("request timed out") {
+        "provider_request_timeout".to_string()
     } else if lower.contains("api error") || lower.contains("provider error") {
         "provider_request_failed".to_string()
     } else if lower.contains("network") || lower.contains("failed to send request") {
@@ -1761,6 +1766,14 @@ mod tests {
     }
 
     #[test]
+    fn quick_enhance_timeout_is_actionable() {
+        assert_eq!(
+            friendly_quick_enhance_error("OpenAI request timed out after 60 seconds"),
+            "The provider did not respond within 60 seconds. Check your connection and try again."
+        );
+    }
+
+    #[test]
     fn quick_enhance_errors_are_reduced_to_safe_diagnostic_codes() {
         let cases = [
             (
@@ -1772,6 +1785,10 @@ mod tests {
                 "provider_api_key_missing",
             ),
             ("Hosted mode not yet implemented", "hosted_mode_unavailable"),
+            (
+                "OpenAI request timed out after 60 seconds",
+                "provider_request_timeout",
+            ),
             (
                 "OpenAI API error (401): sensitive provider response",
                 "provider_request_failed",

@@ -1,9 +1,12 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use futures_util::StreamExt;
 use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
 
-use super::{LlmRequest, LlmResponse, LlmUsage};
+use super::{
+    LlmRequest, LlmResponse, LlmUsage, ensure_provider_success, provider_response_error,
+    send_provider_request,
+};
 
 const OPENAI_API_URL: &str = "https://api.openai.com/v1/chat/completions";
 const OPENROUTER_API_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
@@ -77,26 +80,14 @@ impl OpenAICompatibleClient {
             ],
         };
 
-        let response = self
-            .request_builder()
-            .json(&body)
-            .send()
-            .await
-            .with_context(|| format!("Failed to send request to {}", self.provider_name))?;
+        let response =
+            send_provider_request(self.request_builder().json(&body), self.provider_name).await?;
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "unknown error".to_string());
-            anyhow::bail!("{} API error ({}): {}", self.provider_name, status, body);
-        }
+        let response = ensure_provider_success(response, self.provider_name).await?;
 
-        let api_response: OpenAIResponse = response
-            .json()
-            .await
-            .with_context(|| format!("Failed to parse {} response", self.provider_name))?;
+        let api_response: OpenAIResponse = response.json().await.map_err(|error| {
+            provider_response_error(self.provider_name, "parse response from", error)
+        })?;
 
         let content = api_response
             .choices
@@ -137,28 +128,19 @@ impl OpenAICompatibleClient {
             ],
         };
 
-        let response = self
-            .request_builder()
-            .json(&body)
-            .send()
-            .await
-            .with_context(|| format!("Failed to send request to {}", self.provider_name))?;
+        let response =
+            send_provider_request(self.request_builder().json(&body), self.provider_name).await?;
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "unknown error".to_string());
-            anyhow::bail!("{} API error ({}): {}", self.provider_name, status, body);
-        }
+        let response = ensure_provider_success(response, self.provider_name).await?;
 
         let mut full_content = String::new();
         let mut stream = response.bytes_stream();
         let mut buffer = String::new();
 
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.context("Stream error")?;
+            let chunk = chunk.map_err(|error| {
+                provider_response_error(self.provider_name, "receive stream from", error)
+            })?;
             buffer.push_str(&String::from_utf8_lossy(&chunk));
 
             // Process complete SSE lines.

@@ -256,6 +256,7 @@
       quick_enhance_in_flight: "Quick Enhance was already running.",
       provider_api_key_missing: "Provider API key is missing.",
       hosted_mode_unavailable: "Hosted mode is not available yet.",
+      provider_request_timeout: "Provider timed out after 60 seconds. Check your connection and try again.",
       provider_request_failed: "Provider request failed. Check the selected provider, model, or key.",
       network_request_failed: "Network request failed.",
       quick_enhance_failed: "Quick Enhance failed.",

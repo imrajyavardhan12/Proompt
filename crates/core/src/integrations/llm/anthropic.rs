@@ -1,8 +1,11 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use super::{LlmRequest, LlmResponse, LlmUsage};
+use super::{
+    LlmRequest, LlmResponse, LlmUsage, ensure_provider_success, provider_response_error,
+    send_provider_request,
+};
 
 const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -34,30 +37,23 @@ impl AnthropicClient {
             }],
         };
 
-        let response = self
-            .client
-            .post(ANTHROPIC_API_URL)
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", ANTHROPIC_VERSION)
-            .header("content-type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .context("Failed to send request to Anthropic")?;
+        let response = send_provider_request(
+            self.client
+                .post(ANTHROPIC_API_URL)
+                .header("x-api-key", &self.api_key)
+                .header("anthropic-version", ANTHROPIC_VERSION)
+                .header("content-type", "application/json")
+                .json(&body),
+            "Anthropic",
+        )
+        .await?;
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "unknown error".to_string());
-            anyhow::bail!("Anthropic API error ({}): {}", status, body);
-        }
+        let response = ensure_provider_success(response, "Anthropic").await?;
 
         let api_response: AnthropicResponse = response
             .json()
             .await
-            .context("Failed to parse Anthropic response")?;
+            .map_err(|error| provider_response_error("Anthropic", "parse response from", error))?;
 
         let content = api_response
             .content
