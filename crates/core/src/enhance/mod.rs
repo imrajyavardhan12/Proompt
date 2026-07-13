@@ -10,7 +10,11 @@ use serde::{Deserialize, Serialize};
 use crate::platform::{EnhanceType, Platform};
 
 fn sampling_temperature(platform: Platform, enhancement_type: EnhanceType) -> Option<f32> {
-    (enhancement_type == EnhanceType::Text && platform.is_text_platform()).then_some(0.2)
+    let compatible = match enhancement_type {
+        EnhanceType::Text => platform.is_text_platform(),
+        EnhanceType::Image => platform.is_image_platform() || platform == Platform::Generic,
+    };
+    compatible.then_some(0.2)
 }
 
 fn build_changes_summary(
@@ -153,15 +157,21 @@ pub async fn enhance(
         _ => unreachable!("provider was normalized before matching"),
     };
 
+    let enhanced_prompt = match request.enhancement_type {
+        EnhanceType::Image => {
+            image::sanitize_output(&request.prompt, request.platform, &response.content)
+        }
+        EnhanceType::Text => response.content,
+    };
     let changes_summary = build_changes_summary(
         &request.prompt,
-        &response.content,
+        &enhanced_prompt,
         request.platform,
         supermemory_context.is_some(),
     );
 
     Ok(EnhanceResponse {
-        enhanced_prompt: response.content,
+        enhanced_prompt,
         changes_summary,
         context_used: supermemory_context,
         platform: request.platform,
@@ -169,14 +179,15 @@ pub async fn enhance(
 }
 
 /// Streaming enhancement - calls `on_token` for each token as it arrives.
-/// OpenAI-compatible providers stream tokens; other providers fall back to batch completion.
+/// OpenAI-compatible providers stream text; image responses are buffered for constraint
+/// sanitization. Other providers fall back to batch completion.
 pub async fn enhance_stream(
     request: EnhanceRequest,
     provider: &str,
     api_key: &str,
     model: Option<String>,
     supermemory_context: Option<Vec<String>>,
-    on_token: impl FnMut(&str),
+    mut on_token: impl FnMut(&str),
 ) -> Result<EnhanceResponse> {
     if request.prompt.trim().is_empty() {
         anyhow::bail!("Prompt cannot be empty");
@@ -204,19 +215,28 @@ pub async fn enhance_stream(
 
     let provider = crate::config::normalize_provider(provider)
         .ok_or_else(|| anyhow::anyhow!("Unsupported provider: {}", provider))?;
+    let buffer_for_image_sanitization = request.enhancement_type == EnhanceType::Image;
 
     let response = match provider {
         "openai" => {
             let client =
                 crate::integrations::llm::openai::OpenAIClient::new(api_key.to_string(), model);
-            client.stream(llm_request, on_token).await?
+            if buffer_for_image_sanitization {
+                client.complete(llm_request).await?
+            } else {
+                client.stream(llm_request, &mut on_token).await?
+            }
         }
         "openrouter" => {
             let client = crate::integrations::llm::openai::OpenAIClient::openrouter(
                 api_key.to_string(),
                 model,
             );
-            client.stream(llm_request, on_token).await?
+            if buffer_for_image_sanitization {
+                client.complete(llm_request).await?
+            } else {
+                client.stream(llm_request, &mut on_token).await?
+            }
         }
         "google" => {
             let client =
@@ -233,15 +253,24 @@ pub async fn enhance_stream(
         _ => unreachable!("provider was normalized before matching"),
     };
 
+    let enhanced_prompt = match request.enhancement_type {
+        EnhanceType::Image => {
+            image::sanitize_output(&request.prompt, request.platform, &response.content)
+        }
+        EnhanceType::Text => response.content,
+    };
+    if buffer_for_image_sanitization {
+        on_token(&enhanced_prompt);
+    }
     let changes_summary = build_changes_summary(
         &request.prompt,
-        &response.content,
+        &enhanced_prompt,
         request.platform,
         supermemory_context.is_some(),
     );
 
     Ok(EnhanceResponse {
-        enhanced_prompt: response.content,
+        enhanced_prompt,
         changes_summary,
         context_used: supermemory_context,
         platform: request.platform,
@@ -253,7 +282,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn text_enhancement_sampling_is_low_variance_without_affecting_images() {
+    fn enhancement_sampling_is_low_variance_for_text_and_images() {
         for platform in [
             Platform::Claude,
             Platform::OpenAI,
@@ -267,12 +296,20 @@ mod tests {
             assert_eq!(sampling_temperature(platform, EnhanceType::Text), Some(0.2));
         }
 
+        for platform in [
+            Platform::Midjourney,
+            Platform::DallE,
+            Platform::StableDiffusion,
+            Platform::Generic,
+        ] {
+            assert_eq!(
+                sampling_temperature(platform, EnhanceType::Image),
+                Some(0.2)
+            );
+        }
+
         assert_eq!(
-            sampling_temperature(Platform::Midjourney, EnhanceType::Image),
-            None
-        );
-        assert_eq!(
-            sampling_temperature(Platform::Generic, EnhanceType::Image),
+            sampling_temperature(Platform::Midjourney, EnhanceType::Text),
             None
         );
     }
