@@ -272,6 +272,17 @@ mod tests {
     }
 
     #[test]
+    fn clear_removes_all_persisted_history() {
+        let store = HistoryStore::new(temp_history_path("clear"));
+        store.append(sample_record("one", "enhanced one")).unwrap();
+        store.append(sample_record("two", "enhanced two")).unwrap();
+
+        assert_eq!(store.clear().unwrap(), 2);
+        assert!(store.load().unwrap().is_empty());
+        assert_eq!(store.clear().unwrap(), 0);
+    }
+
+    #[test]
     fn max_records_trims_oldest_records() {
         let store = HistoryStore::new(temp_history_path("trim")).with_max_records(2);
 

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
 
+  type Category = "provider" | "quick" | "privacy" | "help";
+
   let { initialProvider = null, initialSection = "provider" } = $props<{
     initialProvider?: string | null;
     initialSection?: "provider" | "troubleshoot";
@@ -9,12 +11,7 @@
   interface QuickEnhanceRouteInspection {
     promptPreview?: string | null;
     environment?: any;
-    resolution?: {
-      platform: string;
-      source: string;
-      confidence: string;
-      reason: string;
-    } | null;
+    resolution?: { platform: string; source: string; confidence: string; reason: string } | null;
     error?: string | null;
   }
 
@@ -25,32 +22,18 @@
     diagnosticsPath: string;
     lastCapture?: {
       timestampMs: number;
-      selectedTextEnabled: boolean;
       outcome: string;
-      steps: string[];
       inputSource?: string | null;
-      resolution?: {
-        platform: string;
-        source: string;
-        confidence: string;
-        reason: string;
-      } | null;
+      resolution?: { platform: string; source: string; confidence: string; reason: string } | null;
       delivery?: string | null;
       deliveryNote?: string | null;
       error?: string | null;
     } | null;
   }
 
-  interface ClipboardSelfCheck {
-    readable: boolean;
-    writable: boolean;
-    restored: boolean;
-    message: string;
-  }
-
   interface QuickEnhanceSelfCheck {
     accessibility: AccessibilityStatus;
-    clipboard: ClipboardSelfCheck;
+    clipboard: { readable: boolean; writable: boolean; restored: boolean; message: string };
     provider: {
       mode: string;
       provider: string;
@@ -58,12 +41,62 @@
       api_key_configured: boolean;
       api_key_status: string;
       api_key_error?: string | null;
-      env_var: string;
-      cli_command: string;
     };
     route: QuickEnhanceRouteInspection;
   }
 
+  const providers = [
+    {
+      id: "openai",
+      label: "OpenAI",
+      models: ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini"],
+      keyPlaceholder: "sk-proj-...",
+      envVar: "OPENAI_API_KEY",
+      cliCommand: "proompt config set openai.api_key YOUR_KEY",
+      modelHint: "OpenAI model IDs usually start with gpt, chatgpt, o1, o3, or o4.",
+    },
+    {
+      id: "anthropic",
+      label: "Anthropic",
+      models: ["claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"],
+      keyPlaceholder: "sk-ant-...",
+      envVar: "ANTHROPIC_API_KEY",
+      cliCommand: "proompt config set anthropic.api_key YOUR_KEY",
+      modelHint: "Anthropic model IDs should start with claude.",
+    },
+    {
+      id: "google",
+      label: "Google",
+      models: ["gemini-2.0-flash", "gemini-2.0-pro", "gemini-1.5-flash"],
+      keyPlaceholder: "AI...",
+      envVar: "GEMINI_API_KEY",
+      cliCommand: "proompt config set google.api_key YOUR_KEY",
+      modelHint: "Google model IDs should start with gemini.",
+    },
+    {
+      id: "openrouter",
+      label: "OpenRouter",
+      models: [
+        "openai/gpt-4o-mini",
+        "anthropic/claude-3.5-sonnet",
+        "google/gemini-2.0-flash-001",
+        "meta-llama/llama-3.1-8b-instruct",
+      ],
+      keyPlaceholder: "sk-or-...",
+      envVar: "OPENROUTER_API_KEY",
+      cliCommand: "proompt config set openrouter.api_key YOUR_KEY",
+      modelHint: "OpenRouter uses provider/model-id, for example openai/gpt-4o-mini.",
+    },
+  ];
+
+  const categories: { id: Category; label: string }[] = [
+    { id: "provider", label: "Provider" },
+    { id: "quick", label: "Quick Enhance" },
+    { id: "privacy", label: "Privacy" },
+    { id: "help", label: "Help" },
+  ];
+
+  let category = $state<Category>("provider");
   let mode = $state("byok");
   let provider = $state("openai");
   let model = $state("gpt-4o");
@@ -78,63 +111,27 @@
   let supermemoryEnabled = $state(false);
   let supermemoryKey = $state("");
   let status = $state<{ type: "success" | "error"; text: string } | null>(null);
-  let routeInspection = $state<QuickEnhanceRouteInspection | null>(null);
-  let routeInspecting = $state(false);
+  let saving = $state(false);
+  let testingConnection = $state(false);
   let axStatus = $state<AccessibilityStatus | null>(null);
   let axLoading = $state(false);
-  let axStepsExpanded = $state(false);
   let selfCheck = $state<QuickEnhanceSelfCheck | null>(null);
   let selfChecking = $state(false);
-  let testingConnection = $state(false);
-  let saving = $state(false);
+  let routeInspection = $state<QuickEnhanceRouteInspection | null>(null);
+  let routeInspecting = $state(false);
 
-  const providers = [
-    {
-      id: "openai",
-      label: "OpenAI",
-      desc: "GPT-4o, o1, o3",
-      models: ["gpt-4o", "gpt-4o-mini", "o1", "o3-mini"],
-      keyPlaceholder: "sk-proj-...",
-      envVar: "OPENAI_API_KEY",
-      cliCommand: "proompt config set openai.api_key YOUR_KEY",
-      modelHint: "OpenAI models usually start with gpt, chatgpt, o1, o3, or o4.",
-    },
-    {
-      id: "anthropic",
-      label: "Anthropic",
-      desc: "Claude Sonnet, Haiku",
-      models: ["claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"],
-      keyPlaceholder: "sk-ant-...",
-      envVar: "ANTHROPIC_API_KEY",
-      cliCommand: "proompt config set anthropic.api_key YOUR_KEY",
-      modelHint: "Anthropic models should start with claude.",
-    },
-    {
-      id: "google",
-      label: "Google",
-      desc: "Gemini 2.0, 1.5",
-      models: ["gemini-2.0-flash", "gemini-2.0-pro", "gemini-1.5-flash"],
-      keyPlaceholder: "AI...",
-      envVar: "GEMINI_API_KEY",
-      cliCommand: "proompt config set google.api_key YOUR_KEY",
-      modelHint: "Google models should start with gemini.",
-    },
-    {
-      id: "openrouter",
-      label: "OpenRouter",
-      desc: "Claude, GPT, Gemini, OSS",
-      models: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "google/gemini-2.0-flash-001", "meta-llama/llama-3.1-8b-instruct"],
-      keyPlaceholder: "sk-or-...",
-      envVar: "OPENROUTER_API_KEY",
-      cliCommand: "proompt config set openrouter.api_key YOUR_KEY",
-      modelHint: "OpenRouter model ids must look like provider/model-id, for example openai/gpt-4o-mini.",
-    },
-  ];
-
-  let currentProvider = $derived(providers.find((p) => p.id === provider) ?? providers[0]);
+  let currentProvider = $derived(providers.find((item) => item.id === provider) ?? providers[0]);
   let modelError = $derived(validateModel(provider, model));
-  let quickEnhanceHotkeyDisplay = $derived(formatHotkey(quickEnhanceHotkey));
+  let hotkeyDisplay = $derived(formatHotkey(quickEnhanceHotkey));
+  let ready = $derived(mode === "byok" && !modelError);
+
   const accessibilityResetCommand = "tccutil reset Accessibility com.proompt.desktop";
+
+  $effect(() => {
+    category = initialSection === "troubleshoot" ? "help" : "provider";
+    loadConfig();
+    loadAccessibilityStatus();
+  });
 
   async function loadConfig() {
     try {
@@ -150,15 +147,13 @@
       terminalPlatform = config.quick_enhance?.terminal_platform?.toLowerCase() || "";
       saveHistoryEnabled = config.preferences?.save_history ?? true;
       supermemoryEnabled = config.supermemory?.enabled || false;
-      if (initialProvider && providers.some((p) => p.id === initialProvider)) {
+      if (initialProvider && providers.some((item) => item.id === initialProvider)) {
         selectProvider(initialProvider);
       }
-    } catch (e: any) {
-      showStatus("error", `Failed to load: ${e}`);
+    } catch (error: any) {
+      showStatus("error", `Could not load settings: ${error}`);
     }
   }
-
-  $effect(() => { loadConfig(); loadAccessibilityStatus(); });
 
   async function loadAccessibilityStatus() {
     axLoading = true;
@@ -171,120 +166,14 @@
     }
   }
 
-  async function openAccessibilitySettings() {
-    try {
-      await invoke("open_accessibility_settings");
-    } catch (e: any) {
-      showStatus("error", `${e}`);
-    }
-  }
-
-  async function copyAccessibilityResetCommand() {
-    try {
-      await invoke("copy_to_clipboard", { text: accessibilityResetCommand });
-      showStatus("success", "Accessibility reset command copied");
-    } catch (e: any) {
-      try {
-        await navigator.clipboard.writeText(accessibilityResetCommand);
-        showStatus("success", "Accessibility reset command copied");
-      } catch {
-        showStatus("error", `${e}`);
-      }
-    }
-  }
-
-  async function runSelfCheck() {
-    selfChecking = true;
-    try {
-      selfCheck = await invoke<QuickEnhanceSelfCheck>("run_quick_enhance_self_check");
-      axStatus = selfCheck.accessibility;
-      showStatus("success", "Quick Enhance self-check complete");
-    } catch (e: any) {
-      showStatus("error", `${e}`);
-    } finally {
-      selfChecking = false;
-    }
-  }
-
-  function captureOutcomeLabel(outcome: string) {
-    const [kind, detail] = outcome.split(":", 2);
-    const chars = detail?.trim() ? ` (${detail.trim()})` : "";
-    const labels: Record<string, string> = {
-      selected_text_via_accessibility: "Selected text captured via Accessibility",
-      selected_text_via_clipboard: "Selected text captured via clipboard probe",
-      clipboard_fallback: "Fell back to clipboard prompt",
-      empty_input: "No selected text or clipboard text found",
-      not_started: "No capture recorded yet",
-    };
-    return (labels[kind] ?? kind) + chars;
-  }
-
-  function captureOutcomeIsFallback(outcome: string) {
-    return outcome.startsWith("clipboard_fallback") || outcome.startsWith("empty_input");
-  }
-
-  function inputSourceLabel(source?: string | null) {
-    const labels: Record<string, string> = {
-      selected_text: "Selected text",
-      clipboard: "Clipboard",
-    };
-    return source ? (labels[source] ?? source) : "Unknown";
-  }
-
-  function deliveryLabel(delivery?: string | null) {
-    const labels: Record<string, string> = {
-      replaced_selection: "Replaced selection",
-      copied_to_clipboard: "Copied to clipboard",
-    };
-    return delivery ? (labels[delivery] ?? delivery) : "Not completed";
-  }
-
-  function providerReadinessLabel(check?: QuickEnhanceSelfCheck | null) {
-    if (!check) return "Not checked";
-    if (check.provider.mode === "hosted") return "Hosted unavailable";
-    if (check.provider.api_key_configured) return "Ready";
-    if (check.provider.api_key_status === "deferred") return "Keychain deferred";
-    return "Needs key";
-  }
-
-  function statusOk(value: boolean | null | undefined) {
-    return value === true;
-  }
-
-  function diagnosticErrorLabel(error?: string | null) {
-    const labels: Record<string, string> = {
-      quick_enhance_in_flight: "Quick Enhance was already running.",
-      provider_api_key_missing: "Provider API key is missing.",
-      hosted_mode_unavailable: "Hosted mode is not available yet.",
-      provider_request_timeout: "Provider timed out after 60 seconds. Check your connection and try again.",
-      provider_request_failed: "Provider request failed. Check the selected provider, model, or key.",
-      network_request_failed: "Network request failed.",
-      quick_enhance_failed: "Quick Enhance failed.",
-    };
-    return error ? (labels[error] ?? error) : "";
-  }
-
-  function relativeTime(timestampMs: number) {
-    if (!timestampMs) return "unknown time";
-    const seconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
-    if (seconds < 60) return "just now";
-    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
-    return new Date(timestampMs).toLocaleString();
-  }
-
   function selectProvider(providerId: string) {
     provider = providerId;
-    const selectedProvider = providers.find((p) => p.id === providerId) ?? providers[0];
-    model = selectedProvider.models[0];
+    const selected = providers.find((item) => item.id === providerId) ?? providers[0];
+    model = selected.models[0];
   }
 
-  function selectMode(nextMode: "byok" | "hosted") {
-    if (nextMode === "hosted") {
-      showStatus("error", "Hosted mode is coming soon. Use BYOK for now.");
-      return;
-    }
-    mode = nextMode;
+  function providerChanged(event: Event) {
+    selectProvider((event.currentTarget as HTMLSelectElement).value);
   }
 
   function formatHotkey(hotkey: string) {
@@ -293,6 +182,16 @@
       .replace("CmdOrCtrl", isMac ? "⌘" : "Ctrl")
       .replace("Shift", isMac ? "⇧" : "Shift")
       .replace(/\+/g, isMac ? "" : " + ");
+  }
+
+  function validateModel(providerId: string, modelId: string) {
+    const value = modelId.trim();
+    if (!value) return "Choose a model.";
+    if (providerId === "openrouter" && !/^.+\/.+$/.test(value)) return "Use provider/model-id format.";
+    if (providerId === "anthropic" && !value.toLowerCase().startsWith("claude")) return "Anthropic models start with claude.";
+    if (providerId === "google" && !value.toLowerCase().startsWith("gemini")) return "Google models start with gemini.";
+    if (providerId === "openai" && !/^(gpt|chatgpt|o1|o3|o4)/i.test(value)) return "Choose an OpenAI model ID.";
+    return "";
   }
 
   function showStatus(type: "success" | "error", text: string) {
@@ -317,61 +216,106 @@
     });
   }
 
-  async function saveApiKey() {
-    if (!apiKey.trim()) return;
+  async function saveConfig(message = "Settings saved") {
+    if (mode === "hosted") mode = "byok";
     if (modelError) {
       showStatus("error", modelError);
       return;
     }
+    saving = true;
+    try {
+      await persistSettings();
+      showStatus("success", message);
+    } catch (error: any) {
+      showStatus("error", `${error}`);
+    } finally {
+      saving = false;
+    }
+  }
+
+  async function saveApiKey() {
+    if (!apiKey.trim() || modelError) return;
     try {
       await invoke("set_api_key", { service: provider, key: apiKey });
       mode = "byok";
       await persistSettings();
-      showStatus("success", `${currentProvider.label} key saved and selected`);
       apiKey = "";
-    } catch (e: any) { showStatus("error", `${e}`); }
+      showStatus("success", `${currentProvider.label} connected`);
+    } catch (error: any) {
+      showStatus("error", `${error}`);
+    }
   }
 
-  async function saveSmKey() {
+  async function testConnection() {
+    if (modelError) return;
+    testingConnection = true;
+    try {
+      const result = await invoke<string>("test_api_connection", {
+        provider,
+        model,
+        apiKey: apiKey.trim() || null,
+      });
+      showStatus("success", result);
+    } catch (error: any) {
+      showStatus("error", `${error}`);
+    } finally {
+      testingConnection = false;
+    }
+  }
+
+  async function saveSupermemoryKey() {
     if (!supermemoryKey.trim()) return;
     try {
       await invoke("set_api_key", { service: "supermemory", key: supermemoryKey });
-      showStatus("success", "SuperMemory key saved");
       supermemoryKey = "";
-    } catch (e: any) { showStatus("error", `${e}`); }
+      showStatus("success", "SuperMemory key saved");
+    } catch (error: any) {
+      showStatus("error", `${error}`);
+    }
   }
 
-  function validateModel(providerId: string, modelId: string) {
-    const trimmed = modelId.trim();
-    if (!trimmed) return "Model is required";
-    if (providerId === "openrouter") {
-      const [modelProvider, modelName] = trimmed.split("/", 2);
-      if (!modelProvider || !modelName) return "OpenRouter model must use provider/model-id format";
+  async function openAccessibilitySettings() {
+    try {
+      await invoke("open_accessibility_settings");
+    } catch (error: any) {
+      showStatus("error", `${error}`);
     }
-    if (providerId === "anthropic" && !trimmed.toLowerCase().startsWith("claude")) {
-      return "Anthropic model must start with claude";
+  }
+
+  async function copyResetCommand() {
+    try {
+      await invoke("copy_to_clipboard", { text: accessibilityResetCommand });
+      showStatus("success", "Reset command copied");
+    } catch (error: any) {
+      showStatus("error", `${error}`);
     }
-    if (providerId === "google" && !trimmed.toLowerCase().startsWith("gemini")) {
-      return "Google model must start with gemini";
+  }
+
+  async function runSelfCheck() {
+    selfChecking = true;
+    try {
+      selfCheck = await invoke<QuickEnhanceSelfCheck>("run_quick_enhance_self_check");
+      axStatus = selfCheck.accessibility;
+      showStatus("success", "Check complete");
+    } catch (error: any) {
+      showStatus("error", `${error}`);
+    } finally {
+      selfChecking = false;
     }
-    if (providerId === "openai" && !/^(gpt|chatgpt|o1|o3|o4)/i.test(trimmed)) {
-      return "OpenAI model must start with gpt, chatgpt, o1, o3, or o4";
-    }
-    return "";
   }
 
   async function inspectRoute() {
     routeInspecting = true;
     try {
       routeInspection = await invoke<QuickEnhanceRouteInspection>("inspect_quick_enhance_route");
-    } catch (e: any) {
-      routeInspection = { error: e?.toString?.() ?? `${e}` };
+    } catch (error: any) {
+      routeInspection = { error: `${error}` };
     } finally {
       routeInspecting = false;
     }
   }
 
-  function platformLabel(platform: string) {
+  function platformLabel(platform?: string | null) {
     const labels: Record<string, string> = {
       claude: "Claude",
       "claude-code": "Claude Code",
@@ -382,1181 +326,362 @@
       "coding-agent": "Coding Agent",
       generic: "Generic",
     };
-    return labels[platform] ?? platform;
+    return platform ? (labels[platform] ?? platform) : "Unavailable";
   }
 
-  function routingSourceLabel(source: string) {
-    const labels: Record<string, string> = {
-      explicit_prefix: "Explicit prefix",
-      active_app: "Active app",
-      browser_context: "Browser context",
-      terminal_default: "Terminal default",
-      config_default: "Quick Enhance fallback",
-    };
-    return labels[source] ?? source;
-  }
-
-  function routingConfidenceLabel(confidence: string) {
-    const labels: Record<string, string> = {
-      explicit: "explicit",
-      high: "high confidence",
-      medium: "medium confidence",
-      fallback: "fallback",
-    };
-    return labels[confidence] ?? confidence;
-  }
-
-  async function testConnection() {
-    if (modelError) {
-      showStatus("error", modelError);
-      return;
-    }
-    testingConnection = true;
-    try {
-      const result = await invoke<string>("test_api_connection", {
-        provider,
-        model,
-        apiKey: apiKey.trim() || null,
-      });
-      showStatus("success", result);
-    } catch (e: any) {
-      showStatus("error", `${e}`);
-    } finally { testingConnection = false; }
-  }
-
-  async function saveConfig() {
-    if (mode === "hosted") {
-      showStatus("error", "Hosted mode is coming soon. Choose BYOK to save settings.");
-      return;
-    }
-    if (modelError) {
-      showStatus("error", modelError);
-      return;
-    }
-    saving = true;
-    try {
-      await persistSettings();
-      showStatus("success", "Settings saved");
-    } catch (e: any) { showStatus("error", `${e}`); }
-    finally { saving = false; }
+  function relativeTime(timestampMs: number) {
+    const seconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
+    if (seconds < 60) return "just now";
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+    return new Date(timestampMs).toLocaleString();
   }
 </script>
 
 <div class="page">
-  <div class="page-header">
-    <h1>Settings</h1>
-    <p class="subtitle">Connect a provider and tune Quick Enhance</p>
-  </div>
+  <header class="page-header">
+    <span class="eyebrow">SETTINGS</span>
+    <h1>Preferences</h1>
+  </header>
 
-  <section class="mode-summary" class:warning={mode === "hosted"} aria-label="Enhancement mode">
-    <div>
-      <span class="status-dot" class:ok={mode === "byok"} class:bad={mode === "hosted"}></span>
-      <strong>{mode === "hosted" ? "Hosted mode is unavailable" : "Bring your own key"}</strong>
-      <small>{mode === "hosted" ? "Switch to BYOK to enhance prompts." : "Your prompts go directly to the selected provider."}</small>
-    </div>
-    {#if mode === "hosted"}
-      <button class="mode-switch-button" onclick={() => selectMode("byok")}>Use BYOK</button>
-    {:else}
-      <span class="coming-soon">Hosted Pro · coming soon</span>
-    {/if}
-  </section>
-
-  <!-- Provider -->
-  <section class="section">
-    <div class="section-label">Provider</div>
-    <div class="provider-grid">
-      {#each providers as p}
-        <button
-          class="provider-card"
-          class:active={provider === p.id}
-          onclick={() => selectProvider(p.id)}
-        >
-          <span class="provider-name">{p.label}</span>
-          <span class="provider-desc">{p.desc}</span>
+  <div class="settings-shell">
+    <nav class="category-nav" aria-label="Settings categories">
+      {#each categories as item}
+        <button class:active={category === item.id} onclick={() => (category = item.id)}>
+          {item.label}<span>›</span>
         </button>
       {/each}
-    </div>
-  </section>
 
-  <!-- Model -->
-  <section class="section">
-    <div class="section-label">Model</div>
-    <div class="select-wrap">
-      <select bind:value={model}>
-        {#if !currentProvider.models.includes(model)}
-          <option value={model}>{model} (custom)</option>
+      <div class="readiness">
+        <i class:warning={!ready}></i>
+        <span>
+          <strong>{ready ? "Proompt is ready" : "Setup needed"}</strong>
+          <small>{currentProvider.label} · {model}</small>
+        </span>
+      </div>
+    </nav>
+
+    <main class="category-content">
+      {#if category === "provider"}
+        <div class="content-header">
+          <h2>Provider</h2>
+          <p>Choose the AI service Proompt uses.</p>
+        </div>
+
+        {#if mode === "hosted"}
+          <div class="notice warning">
+            <div><strong>Hosted mode is not available yet</strong><span>Saving will switch Proompt back to your own API key.</span></div>
+          </div>
         {/if}
-        {#each currentProvider.models as m}
-          <option value={m}>{m}</option>
-        {/each}
-      </select>
-    </div>
-    <details class="inline-disclosure">
-      <summary>Use a custom model ID</summary>
-      <input
-        class="model-input"
-        type="text"
-        bind:value={model}
-        placeholder={provider === "openrouter" ? "provider/model-id" : "Custom model id"}
-      />
-      <p class="hint">{currentProvider.modelHint}</p>
-    </details>
-    {#if modelError}
-      <p class="field-error">{modelError}</p>
-    {/if}
-  </section>
 
-  <!-- API Key -->
-  <section class="section">
-    <div class="section-label">API Key</div>
-    <div class="key-row">
-      <input
-        type="password"
-        bind:value={apiKey}
-        placeholder={currentProvider.keyPlaceholder}
-      />
-      <button class="btn-secondary" onclick={saveApiKey} disabled={!apiKey.trim() || !!modelError}>Save</button>
-      <button class="btn-secondary" onclick={testConnection} disabled={testingConnection || !!modelError}>
-        {testingConnection ? "..." : "Test"}
-      </button>
-    </div>
-    <p class="hint">Stored in your OS keychain. Paste a key above to test it before saving.</p>
-    <details class="inline-disclosure">
-      <summary>CLI and environment setup</summary>
-      <div class="setup-guide">
-        <div class="setup-row">
-          <span>CLI</span>
-          <code>{currentProvider.cliCommand}</code>
+        <label class="field">
+          <span>Provider</span>
+          <select value={provider} onchange={providerChanged}>
+            {#each providers as item}<option value={item.id}>{item.label}</option>{/each}
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Model</span>
+          <select bind:value={model}>
+            {#if !currentProvider.models.includes(model)}<option value={model}>{model} (custom)</option>{/if}
+            {#each currentProvider.models as item}<option value={item}>{item}</option>{/each}
+          </select>
+        </label>
+
+        <details class="disclosure">
+          <summary>Use a custom model ID</summary>
+          <input class="text-input" type="text" bind:value={model} placeholder="Model ID" />
+          <small>{currentProvider.modelHint}</small>
+        </details>
+        {#if modelError}<p class="field-error">{modelError}</p>{/if}
+
+        <div class="key-box">
+          <div><strong>API key</strong><small>Stored securely in your OS keychain</small></div>
+          <div class="key-actions">
+            <input type="password" bind:value={apiKey} placeholder={currentProvider.keyPlaceholder} />
+            <button class="secondary" onclick={testConnection} disabled={testingConnection || !!modelError}>{testingConnection ? "Testing…" : "Test"}</button>
+            <button class="secondary" onclick={saveApiKey} disabled={!apiKey.trim() || !!modelError}>Save key</button>
+          </div>
         </div>
-        <div class="setup-row">
-          <span>Env</span>
-          <code>export {currentProvider.envVar}=...</code>
+
+        <details class="disclosure muted">
+          <summary>Command-line setup</summary>
+          <div class="code-row"><span>CLI</span><code>{currentProvider.cliCommand}</code></div>
+          <div class="code-row"><span>ENV</span><code>export {currentProvider.envVar}=...</code></div>
+        </details>
+
+        <button class="primary" onclick={() => saveConfig("Provider saved")} disabled={saving || !!modelError}>{saving ? "Saving…" : "Save provider"}</button>
+
+      {:else if category === "quick"}
+        <div class="content-header">
+          <h2>Quick Enhance</h2>
+          <p>Control what happens when you press the shortcut.</p>
         </div>
-      </div>
-    </details>
-  </section>
 
-  <!-- Quick Enhance Target -->
-  <section class="section">
-    <div class="section-label">Quick Enhance fallback target</div>
-    <p class="hint" style="margin: 0 0 8px">Used by {quickEnhanceHotkeyDisplay} when no /prefix or active-app detection matches.</p>
-    <div class="select-wrap">
-      <select bind:value={defaultPlatform}>
-        <optgroup label="Chat assistants">
-          <option value="claude">Claude</option>
-          <option value="openai">OpenAI</option>
-          <option value="gemini">Gemini</option>
-          <option value="generic">Generic</option>
-        </optgroup>
-        <optgroup label="Coding agents">
-          <option value="claude-code">Claude Code</option>
-          <option value="cursor">Cursor</option>
-          <option value="codex">Codex</option>
-          <option value="coding-agent">Coding Agent</option>
-        </optgroup>
-      </select>
-    </div>
+        <div class="shortcut-card">
+          <kbd>{hotkeyDisplay}</kbd>
+          <span><strong>Enhance from any app</strong><small>Select text, press the shortcut, and Proompt replaces it.</small></span>
+        </div>
 
-    <div class="section-row" style="margin-top: 12px">
-      <div>
-        <div class="section-label" style="margin-bottom: 2px">Auto-detect active app</div>
-        <p class="hint" style="margin: 0">Route Quick Enhance to Cursor, ChatGPT, Claude, or browser context when confidently detected.</p>
-      </div>
-      <label class="toggle">
-        <div class="toggle-track" class:on={autoDetectTarget}>
+        <label class="toggle-row">
+          <span><strong>Automatic target</strong><small>Detect ChatGPT, Claude, Cursor, and terminal apps.</small></span>
           <input type="checkbox" bind:checked={autoDetectTarget} />
-          <div class="toggle-thumb"></div>
-        </div>
-      </label>
-    </div>
+        </label>
 
-    <div class="section-row" style="margin-top: 12px">
-      <div>
-        <div class="section-label" style="margin-bottom: 2px">Use selected text when available</div>
-        <p class="hint" style="margin: 0">Quick Enhance copies the current selection, enhances it, then replaces it when the original app is still focused. Falls back to clipboard.</p>
-      </div>
-      <label class="toggle">
-        <div class="toggle-track" class:on={selectedTextEnabled}>
+        <label class="toggle-row">
+          <span><strong>Use selected text</strong><small>Falls back to clipboard content when nothing is selected.</small></span>
           <input type="checkbox" bind:checked={selectedTextEnabled} />
-          <div class="toggle-thumb"></div>
+        </label>
+
+        <label class="field">
+          <span>Fallback target</span>
+          <select bind:value={defaultPlatform}>
+            <optgroup label="Chat assistants">
+              <option value="claude">Claude</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="generic">Generic</option>
+            </optgroup>
+            <optgroup label="Coding agents">
+              <option value="claude-code">Claude Code</option><option value="cursor">Cursor</option><option value="codex">Codex</option><option value="coding-agent">Coding Agent</option>
+            </optgroup>
+          </select>
+          <small>Used only when Proompt cannot confidently detect a target.</small>
+        </label>
+
+        <label class="field">
+          <span>Default image generator</span>
+          <select bind:value={defaultImagePlatform}>
+            <option value="midjourney">Midjourney</option><option value="dalle">DALL-E</option><option value="stablediffusion">Stable Diffusion</option><option value="generic">Generic</option>
+          </select>
+        </label>
+
+        <details class="disclosure">
+          <summary>Terminal app target</summary>
+          <label class="field nested">
+            <span>When Quick Enhance runs from a terminal</span>
+            <select bind:value={terminalPlatform}>
+              <option value="">Use fallback target</option><option value="claude-code">Claude Code</option><option value="cursor">Cursor</option><option value="codex">Codex</option><option value="coding-agent">Coding Agent</option><option value="claude">Claude</option><option value="openai">GPT</option><option value="gemini">Gemini</option><option value="generic">Generic</option>
+            </select>
+          </label>
+        </details>
+
+        <button class="primary" onclick={() => saveConfig("Quick Enhance saved")} disabled={saving}>{saving ? "Saving…" : "Save Quick Enhance"}</button>
+
+      {:else if category === "privacy"}
+        <div class="content-header">
+          <h2>Privacy</h2>
+          <p>Choose what Proompt stores and which integrations it uses.</p>
         </div>
-      </label>
-    </div>
 
-    <details class="disclosure troubleshoot" open={initialSection === "troubleshoot"}>
-      <summary>
-        <span><strong>Troubleshoot Quick Enhance</strong><small>Permissions, capture, routing, and delivery diagnostics</small></span>
-        <span class="summary-action">Open</span>
-      </summary>
-
-    <div class="diagnostic-card">
-      <div class="diagnostic-top">
-        <div>
-          <span class="diagnostic-title">Quick Enhance diagnostics</span>
-          <p class="hint" style="margin: 2px 0 0">Accessibility permission state, capture path, route, and delivery for the last attempt.</p>
+        <div class="privacy-note">
+          <strong>Your prompts go directly to {currentProvider.label}</strong>
+          <p>API keys stay in your OS keychain. Proompt does not proxy prompts through a hosted server.</p>
         </div>
-        <div class="diagnostic-actions">
-          <button class="btn-secondary" onclick={runSelfCheck} disabled={selfChecking}>
-            {selfChecking ? "Checking..." : "Run self-check"}
-          </button>
-          <button class="btn-secondary" onclick={loadAccessibilityStatus} disabled={axLoading}>
-            {axLoading ? "Checking..." : "Refresh"}
-          </button>
-        </div>
-      </div>
 
-      {#if axStatus}
-        {#if !axStatus.platformSupported}
-          <p class="hint">Selected-text capture is only available on macOS.</p>
-        {:else}
-          <div class="ax-status-row">
-            <span
-              class="status-dot"
-              class:ok={axStatus.accessibilityTrusted === true}
-              class:bad={axStatus.accessibilityTrusted === false}
-            ></span>
-            <span class="ax-status-text">
-              {axStatus.accessibilityTrusted
-                ? "Accessibility permission granted"
-                : "Accessibility permission not granted"}
-            </span>
-            {#if axStatus.accessibilityTrusted === false}
-              <button class="btn-secondary" onclick={openAccessibilitySettings}>Open System Settings</button>
-            {/if}
-          </div>
-
-          {#if axStatus.accessibilityTrusted === false}
-            <div class="ax-help-card">
-              <strong>Enable selected-text Quick Enhance</strong>
-              <ol>
-                <li>Open Privacy &amp; Security → Accessibility.</li>
-                <li>Enable Proompt for the currently installed app.</li>
-                <li>If Proompt already looks enabled but capture still fails, reset permission and grant it again.</li>
-              </ol>
-              <div class="command-row">
-                <code>{accessibilityResetCommand}</code>
-                <button class="btn-secondary" onclick={copyAccessibilityResetCommand}>Copy reset command</button>
-              </div>
-              <p class="hint" style="margin: 0">
-                This is expected for unsigned macOS builds after replacing or rebuilding the app. It does not send selected text or prompt content anywhere.
-              </p>
-            </div>
-          {:else if axStatus.accessibilityTrusted === true}
-            <p class="hint">
-              If a future unsigned update stops capturing selected text, reset Accessibility for Proompt and grant it again.
-            </p>
-          {/if}
-
-          {#if selfCheck}
-            <div class="diagnostic-result">
-              <span>Self-check</span>
-              <strong>{selfCheck.clipboard.writable && selfCheck.clipboard.restored ? "Clipboard OK" : "Clipboard needs attention"}</strong>
-              <small>{selfCheck.clipboard.message}</small>
-            </div>
-
-            <div class="diagnostic-grid">
-              <div>
-                <span>Accessibility</span>
-                <strong>{statusOk(selfCheck.accessibility.accessibilityTrusted) ? "Trusted" : "Not trusted"}</strong>
-              </div>
-              <div>
-                <span>Provider</span>
-                <strong>{providerReadinessLabel(selfCheck)}</strong>
-              </div>
-              <div>
-                <span>Route preview</span>
-                <strong>{selfCheck.route.resolution ? platformLabel(selfCheck.route.resolution.platform) : "Unavailable"}</strong>
-              </div>
-            </div>
-
-            {#if selfCheck.provider.api_key_error}
-              <p class="hint">Provider: {selfCheck.provider.api_key_error}</p>
-            {/if}
-            {#if selfCheck.route.error}
-              <div class="diagnostic-error warning">Route preview: {selfCheck.route.error}</div>
-            {/if}
-          {/if}
-
-          {#if axStatus.lastCapture && axStatus.lastCapture.outcome !== "not_started"}
-            <div class="diagnostic-row">
-              <span>Last attempt · {relativeTime(axStatus.lastCapture.timestampMs)}</span>
-              <strong
-                class="ax-outcome"
-                class:fallback={captureOutcomeIsFallback(axStatus.lastCapture.outcome)}
-              >{captureOutcomeLabel(axStatus.lastCapture.outcome)}</strong>
-            </div>
-
-            <div class="diagnostic-grid">
-              <div>
-                <span>Input</span>
-                <strong>{inputSourceLabel(axStatus.lastCapture.inputSource)}</strong>
-              </div>
-              <div>
-                <span>Delivery</span>
-                <strong>{deliveryLabel(axStatus.lastCapture.delivery)}</strong>
-              </div>
-              <div>
-                <span>Target</span>
-                <strong>{axStatus.lastCapture.resolution ? platformLabel(axStatus.lastCapture.resolution.platform) : "Not resolved"}</strong>
-              </div>
-            </div>
-
-            {#if axStatus.lastCapture.resolution}
-              <div class="diagnostic-result">
-                <span>Route</span>
-                <strong>{platformLabel(axStatus.lastCapture.resolution.platform)}</strong>
-                <small>{routingSourceLabel(axStatus.lastCapture.resolution.source)} · {routingConfidenceLabel(axStatus.lastCapture.resolution.confidence)} · {axStatus.lastCapture.resolution.reason}</small>
-              </div>
-            {/if}
-
-            {#if axStatus.lastCapture.deliveryNote}
-              <div class="diagnostic-error warning">Replacement fallback: {axStatus.lastCapture.deliveryNote}</div>
-            {/if}
-
-            {#if axStatus.lastCapture.error}
-              <div class="diagnostic-error">{diagnosticErrorLabel(axStatus.lastCapture.error)}</div>
-            {/if}
-
-            {#if axStatus.lastCapture.steps.length > 0}
-              <button class="ax-steps-toggle" onclick={() => (axStepsExpanded = !axStepsExpanded)}>
-                {axStepsExpanded ? "Hide capture steps" : `Show capture steps (${axStatus.lastCapture.steps.length})`}
-              </button>
-              {#if axStepsExpanded}
-                <ol class="ax-steps">
-                  {#each axStatus.lastCapture.steps as step}
-                    <li>{step}</li>
-                  {/each}
-                </ol>
-              {/if}
-            {/if}
-          {:else}
-            <p class="hint">No capture recorded yet. Trigger Quick Enhance once to populate this.</p>
-          {/if}
-        {/if}
-      {:else if !axLoading}
-        <p class="hint">Diagnostics unavailable.</p>
-      {/if}
-    </div>
-
-    <div class="section-label" style="margin-top: 14px">Terminal default target</div>
-    <p class="hint" style="margin: 0 0 8px">Used for Terminal, Ghostty, iTerm, Warp, and similar apps when no /prefix is present.</p>
-    <div class="select-wrap">
-      <select bind:value={terminalPlatform}>
-        <option value="">Use fallback target</option>
-        <option value="claude-code">Claude Code</option>
-        <option value="cursor">Cursor</option>
-        <option value="codex">Codex</option>
-        <option value="coding-agent">Coding Agent</option>
-        <option value="claude">Claude</option>
-        <option value="openai">GPT</option>
-        <option value="gemini">Gemini</option>
-        <option value="generic">Generic</option>
-      </select>
-    </div>
-
-    <div class="diagnostic-card">
-      <div class="diagnostic-top">
-        <div>
-          <span class="diagnostic-title">Clipboard route preview</span>
-          <p class="hint" style="margin: 2px 0 0">Preview saved-settings and /prefix routing. Actual hotkey active-app routes are recorded in History.</p>
-        </div>
-        <button class="btn-secondary" onclick={inspectRoute} disabled={routeInspecting}>
-          {routeInspecting ? "Inspecting..." : "Inspect"}
-        </button>
-      </div>
-
-      {#if routeInspection}
-        {#if routeInspection.error}
-          <div class="diagnostic-error">{routeInspection.error}</div>
-        {/if}
-
-        {#if routeInspection.resolution}
-          <div class="diagnostic-result">
-            <span>Resolved target</span>
-            <strong>{platformLabel(routeInspection.resolution.platform)}</strong>
-            <small>{routingSourceLabel(routeInspection.resolution.source)} · {routingConfidenceLabel(routeInspection.resolution.confidence)} · {routeInspection.resolution.reason}</small>
-          </div>
-        {/if}
-
-        {#if routeInspection.promptPreview}
-          <div class="diagnostic-row">
-            <span>Clipboard</span>
-            <code>{routeInspection.promptPreview}</code>
-          </div>
-        {/if}
-
-        {#if routeInspection.environment}
-          <div class="diagnostic-grid">
-            <div>
-              <span>Active app</span>
-              <strong>{routeInspection.environment.active_app?.name ?? "Unknown"}</strong>
-            </div>
-            <div>
-              <span>Window</span>
-              <strong>{routeInspection.environment.window_title ?? "Unavailable"}</strong>
-            </div>
-            <div>
-              <span>Browser URL</span>
-              <strong>{routeInspection.environment.browser_context?.url ?? "Unavailable"}</strong>
-            </div>
-          </div>
-        {/if}
-      {/if}
-    </div>
-    </details>
-  </section>
-
-  <details class="disclosure advanced">
-    <summary>
-      <span><strong>Advanced settings</strong><small>Image defaults, history, integrations, and shortcut details</small></span>
-      <span class="summary-action">Open</span>
-    </summary>
-
-  <!-- Default Image Platform -->
-  <section class="section">
-    <div class="section-label">Default image platform</div>
-    <div class="select-wrap">
-      <select bind:value={defaultImagePlatform}>
-        <option value="midjourney">Midjourney</option>
-        <option value="dalle">DALL-E</option>
-        <option value="stablediffusion">Stable Diffusion</option>
-        <option value="generic">Generic</option>
-      </select>
-    </div>
-  </section>
-
-  <!-- Hotkeys -->
-  <section class="section">
-    <div class="section-label">Hotkeys</div>
-    <div class="hotkey-card">
-      <div>
-        <span class="hotkey-name">Quick Enhance</span>
-        <p class="hint" style="margin: 2px 0 0">Reads clipboard, routes by /prefix or target above, enhances it, and copies the result back.</p>
-      </div>
-      <kbd>{quickEnhanceHotkeyDisplay}</kbd>
-    </div>
-  </section>
-
-  <!-- Privacy -->
-  <section class="section">
-    <div class="section-row">
-      <div>
-        <div class="section-label" style="margin-bottom: 2px">Local history</div>
-        <p class="hint" style="margin: 0">Save successful prompt enhancements locally on this device.</p>
-      </div>
-      <label class="toggle">
-        <div class="toggle-track" class:on={saveHistoryEnabled}>
+        <label class="toggle-row">
+          <span><strong>Save prompt history</strong><small>Store successful enhancements locally on this device.</small></span>
           <input type="checkbox" bind:checked={saveHistoryEnabled} />
-          <div class="toggle-thumb"></div>
-        </div>
-      </label>
-    </div>
-  </section>
+        </label>
 
-  <!-- SuperMemory -->
-  <section class="section">
-    <div class="section-row">
-      <div>
-        <div class="section-label" style="margin-bottom: 2px">SuperMemory</div>
-        <p class="hint" style="margin: 0">Context retrieval for personalized prompts</p>
-      </div>
-      <label class="toggle">
-        <div class="toggle-track" class:on={supermemoryEnabled}>
+        <label class="toggle-row">
+          <span><strong>SuperMemory</strong><small>Add relevant personal context to enhanced prompts.</small></span>
           <input type="checkbox" bind:checked={supermemoryEnabled} />
-          <div class="toggle-thumb"></div>
-        </div>
-      </label>
-    </div>
-    {#if supermemoryEnabled}
-      <div class="key-row" style="margin-top: 10px">
-        <input type="password" bind:value={supermemoryKey} placeholder="sm_..." />
-        <button class="btn-secondary" onclick={saveSmKey} disabled={!supermemoryKey.trim()}>Save</button>
-      </div>
-    {/if}
-  </section>
-  </details>
+        </label>
 
-  <button class="btn-primary full-width" onclick={saveConfig} disabled={saving || !!modelError}>
-    {saving ? "Saving..." : "Save settings"}
-  </button>
+        {#if supermemoryEnabled}
+          <div class="key-box">
+            <div><strong>SuperMemory key</strong><small>Stored in your OS keychain</small></div>
+            <div class="key-actions compact">
+              <input type="password" bind:value={supermemoryKey} placeholder="sm_..." />
+              <button class="secondary" onclick={saveSupermemoryKey} disabled={!supermemoryKey.trim()}>Save key</button>
+            </div>
+          </div>
+        {/if}
+
+        <button class="primary" onclick={() => saveConfig("Privacy settings saved")} disabled={saving}>{saving ? "Saving…" : "Save privacy settings"}</button>
+
+      {:else}
+        <div class="content-header">
+          <h2>Help</h2>
+          <p>Run checks only when something is not working.</p>
+        </div>
+
+        <div class="permission-card">
+          <div class="permission-state">
+            <i class:ok={axStatus?.accessibilityTrusted === true} class:bad={axStatus?.accessibilityTrusted === false}></i>
+            <span>
+              <strong>{axLoading ? "Checking Accessibility…" : axStatus?.accessibilityTrusted ? "Accessibility allowed" : "Accessibility needs attention"}</strong>
+              <small>Required to read and replace selected text on macOS.</small>
+            </span>
+          </div>
+          <button class="secondary" onclick={openAccessibilitySettings}>Open settings</button>
+        </div>
+
+        <button class="help-row" onclick={runSelfCheck} disabled={selfChecking}>
+          <span><strong>Quick Enhance check</strong><small>Checks Accessibility, clipboard, provider, and routing.</small></span>
+          <b>{selfChecking ? "Checking…" : "Run"}</b>
+        </button>
+        <button class="help-row" onclick={loadAccessibilityStatus} disabled={axLoading}>
+          <span><strong>Refresh permission status</strong><small>Check macOS Accessibility again.</small></span>
+          <b>Refresh</b>
+        </button>
+
+        {#if selfCheck}
+          <div class="check-results">
+            <div><span>Accessibility</span><strong>{selfCheck.accessibility.accessibilityTrusted ? "Ready" : "Needs access"}</strong></div>
+            <div><span>Clipboard</span><strong>{selfCheck.clipboard.writable && selfCheck.clipboard.restored ? "Ready" : "Check failed"}</strong></div>
+            <div><span>Provider</span><strong>{selfCheck.provider.api_key_configured ? "Ready" : "Needs key"}</strong></div>
+            <div><span>Target</span><strong>{platformLabel(selfCheck.route.resolution?.platform)}</strong></div>
+          </div>
+          {#if selfCheck.provider.api_key_error}<div class="notice warning">{selfCheck.provider.api_key_error}</div>{/if}
+        {/if}
+
+        {#if axStatus?.lastCapture && axStatus.lastCapture.outcome !== "not_started"}
+          <div class="last-attempt">
+            <span>Last Quick Enhance · {relativeTime(axStatus.lastCapture.timestampMs)}</span>
+            <strong>{axStatus.lastCapture.outcome.replaceAll("_", " ")}</strong>
+            <small>Target: {platformLabel(axStatus.lastCapture.resolution?.platform)} · Delivery: {axStatus.lastCapture.delivery?.replaceAll("_", " ") ?? "not completed"}</small>
+            {#if axStatus.lastCapture.error}<em>{axStatus.lastCapture.error}</em>{/if}
+          </div>
+        {/if}
+
+        <details class="advanced-help">
+          <summary>Advanced diagnostics</summary>
+          <div class="advanced-content">
+            <p>If an unsigned rebuild loses Accessibility access, reset it and grant permission again.</p>
+            <div class="command-row"><code>{accessibilityResetCommand}</code><button class="secondary" onclick={copyResetCommand}>Copy</button></div>
+            {#if axStatus?.diagnosticsPath}<small>Local diagnostics: {axStatus.diagnosticsPath}</small>{/if}
+            <button class="secondary inspect" onclick={inspectRoute} disabled={routeInspecting}>{routeInspecting ? "Inspecting…" : "Inspect clipboard route"}</button>
+            {#if routeInspection}
+              <div class="route-result">
+                {#if routeInspection.error}<span class="field-error">{routeInspection.error}</span>{/if}
+                {#if routeInspection.resolution}<strong>{platformLabel(routeInspection.resolution.platform)}</strong><small>{routeInspection.resolution.reason}</small>{/if}
+                {#if routeInspection.promptPreview}<code>{routeInspection.promptPreview}</code>{/if}
+              </div>
+            {/if}
+          </div>
+        </details>
+      {/if}
+    </main>
+  </div>
 
   {#if status}
-    <div class="toast" class:success={status.type === "success"} class:error={status.type === "error"}>
-      {#if status.type === "success"}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      {:else}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-      {/if}
-      {status.text}
-    </div>
+    <div class="toast" class:success={status.type === "success"} class:error={status.type === "error"}>{status.text}</div>
   {/if}
 </div>
 
 <style>
-  .page {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    max-width: 620px;
-  }
-
-  .page-header {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  h1 {
-    font-size: 22px;
-    font-weight: 650;
-    color: #f5f5f5;
-    letter-spacing: -0.5px;
-  }
-
-  .subtitle {
-    font-size: 13px;
-    color: #787878;
-    font-weight: 450;
-  }
-
-  .mode-summary {
-    padding: 11px 13px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    background: linear-gradient(145deg, rgba(38, 40, 46, 0.58), rgba(21, 22, 26, 0.48));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
-    backdrop-filter: blur(18px) saturate(130%);
-    -webkit-backdrop-filter: blur(18px) saturate(130%);
-  }
-
-  .mode-summary div {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    min-width: 0;
-  }
-
-  .mode-summary strong {
-    color: #e8e6e2;
-    font-size: 11.5px;
-    font-weight: 600;
-  }
-
-  .mode-summary small,
-  .coming-soon {
-    color: #6f7279;
-    font-size: 10px;
-  }
-
-  .coming-soon { white-space: nowrap; }
-
-  .mode-summary.warning {
-    border-color: rgba(196, 164, 107, 0.24);
-    background: rgba(196, 164, 107, 0.07);
-  }
-
-  .mode-switch-button {
-    padding: 6px 9px;
-    border: 1px solid #454137;
-    border-radius: 7px;
-    background: transparent;
-    color: #d1bea0;
-    cursor: pointer;
-    font-size: 10.5px;
-    white-space: nowrap;
-  }
-
-  .inline-disclosure summary {
-    width: fit-content;
-    color: #777a80;
-    cursor: pointer;
-    font-size: 10.5px;
-    list-style-position: inside;
-  }
-
-  .inline-disclosure[open] summary {
-    margin-bottom: 7px;
-    color: #aaa;
-  }
-
-  .disclosure {
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 12px;
-    overflow: hidden;
-    background: linear-gradient(145deg, rgba(34, 36, 42, 0.52), rgba(19, 20, 24, 0.46));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
-    backdrop-filter: blur(18px) saturate(125%);
-    -webkit-backdrop-filter: blur(18px) saturate(125%);
-  }
-
-  .disclosure > summary {
-    padding: 12px 13px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    cursor: pointer;
-    list-style: none;
-  }
-
-  .disclosure > summary::-webkit-details-marker { display: none; }
-
-  .disclosure > summary > span:first-child {
-    display: grid;
-    gap: 3px;
-  }
-
-  .disclosure > summary strong {
-    color: #deddd9;
-    font-size: 12px;
-    font-weight: 600;
-  }
-
-  .disclosure > summary small {
-    color: #696c72;
-    font-size: 10px;
-  }
-
-  .summary-action {
-    color: #85888e;
-    font-size: 10px;
-  }
-
-  .disclosure[open] > summary {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-    background: rgba(255, 255, 255, 0.035);
-  }
-
-  .disclosure[open] > summary .summary-action {
-    font-size: 0;
-  }
-
-  .disclosure[open] > summary .summary-action::after {
-    content: "Close";
-    font-size: 10px;
-  }
-
-  .troubleshoot {
-    margin-top: 12px;
-  }
-
-  .troubleshoot[open] {
-    padding: 0 12px 12px;
-  }
-
-  .troubleshoot[open] > summary {
-    margin: 0 -12px 2px;
-  }
-
-  .advanced > .section {
-    margin: 14px 13px;
-  }
-
-  .advanced > .section + .section {
-    padding-top: 14px;
-    border-top: 1px solid #292b30;
-  }
-
-  .section {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .section-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: #bebebe;
-  }
-
-  .section-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  /* ── Provider cards ───────────────── */
-
-  .provider-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-
-  .provider-card {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    padding: 12px;
-    background: linear-gradient(145deg, rgba(37, 39, 45, 0.55), rgba(20, 21, 25, 0.44));
-    border: 1px solid rgba(255, 255, 255, 0.085);
-    border-radius: 11px;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    cursor: pointer;
-    text-align: left;
-    transition: all 0.12s ease;
-  }
-
-  .provider-card:hover {
-    border-color: rgba(255, 255, 255, 0.16);
-    background: rgba(255, 255, 255, 0.07);
-  }
-
-  .provider-card.active {
-    border-color: rgba(214, 211, 209, 0.36);
-    background: rgba(214, 211, 209, 0.09);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 8px 24px rgba(0, 0, 0, 0.14);
-  }
-
-  .provider-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: #eeeeee;
-  }
-
-  .provider-card.active .provider-name {
-    color: #f5f5f4;
-  }
-
-  .provider-desc {
-    font-size: 11px;
-    color: #787878;
-  }
-
-  /* ── Hotkeys ──────────────────────── */
-
-  .hotkey-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px;
-    background: rgba(28, 29, 34, 0.52);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 11px;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
-  }
-
-  .hotkey-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: #eeeeee;
-  }
-
-  kbd {
-    font-family: inherit;
-    font-size: 11px;
-    padding: 4px 8px;
-    background: #202020;
-    color: #bebebe;
-    border-radius: 6px;
-    border: 1px solid #3a3a3a;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  /* ── Form elements ────────────────── */
-
-  .select-wrap select,
-  .model-input,
-  .key-row input {
-    padding: 8px 12px;
-    background: rgba(19, 20, 24, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    color: #eeeeee;
-    border-radius: 8px;
-    font-size: 13px;
-    font-family: inherit;
-    transition: border-color 0.12s ease;
-    width: 100%;
-  }
-
-  .select-wrap select:focus,
-  .model-input:focus,
-  .key-row input:focus {
-    outline: none;
-    border-color: #d6d3d1;
-    box-shadow: 0 0 0 3px rgba(214, 211, 209, 0.08);
-  }
-
-  .model-input {
-    margin-top: 6px;
-  }
-
-  .key-row {
-    display: flex;
-    gap: 6px;
-  }
-
-  .key-row input {
-    flex: 1;
-    width: auto;
-  }
-
-  .hint {
-    font-size: 11px;
-    color: #5f5f5f;
-    margin: 0;
-  }
-
-  .field-error {
-    font-size: 11px;
-    color: #d08c8c;
-    margin: 0;
-  }
-
-  .setup-guide {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 10px;
-    background: rgba(20, 21, 25, 0.52);
-    border: 1px solid rgba(255, 255, 255, 0.075);
-    border-radius: 9px;
-  }
-
-  .setup-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .setup-row span {
-    width: 28px;
-    flex-shrink: 0;
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #787878;
-  }
-
-  code {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    padding: 3px 6px;
-    background: #202020;
-    border: 1px solid #3a3a3a;
-    border-radius: 5px;
-    color: #bebebe;
-    font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
-    font-size: 10.5px;
-  }
-
-  /* ── Routing diagnostics ──────────── */
-
-  .diagnostic-card {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 12px;
-    padding: 12px;
-    background: rgba(19, 20, 24, 0.52);
-    border: 1px solid rgba(255, 255, 255, 0.075);
-    border-radius: 10px;
-  }
-
-  .diagnostic-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .diagnostic-actions {
-    display: flex;
-    gap: 6px;
-    flex-shrink: 0;
-  }
-
-  .diagnostic-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: #eeeeee;
-  }
-
-  .diagnostic-error {
-    padding: 8px 10px;
-    background: rgba(184, 92, 92, 0.10);
-    border: 1px solid rgba(184, 92, 92, 0.18);
-    color: #d08c8c;
-    border-radius: 8px;
-    font-size: 11.5px;
-  }
-
-  .diagnostic-error.warning {
-    background: rgba(196, 164, 107, 0.10);
-    border-color: rgba(196, 164, 107, 0.20);
-    color: #c4a46b;
-  }
-
-  .diagnostic-result {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    padding: 10px;
-    background: rgba(214, 211, 209, 0.06);
-    border: 1px solid rgba(214, 211, 209, 0.14);
-    border-radius: 8px;
-  }
-
-  .diagnostic-result span,
-  .diagnostic-row span,
-  .diagnostic-grid span {
-    font-size: 10px;
-    color: #787878;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-weight: 700;
-  }
-
-  .diagnostic-result strong {
-    color: #f5f5f4;
-    font-size: 13px;
-  }
-
-  .diagnostic-result small {
-    color: #d6d3d1;
-    font-size: 11px;
-    line-height: 1.4;
-  }
-
-  .diagnostic-row {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    min-width: 0;
-  }
-
-  .diagnostic-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .diagnostic-grid div {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-  }
-
-  .diagnostic-grid strong {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: #bebebe;
-    font-size: 11px;
-    font-weight: 500;
-  }
-
-  /* ── Accessibility diagnostics ────── */
-
-  .ax-status-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 99px;
-    background: #787878;
-    flex-shrink: 0;
-  }
-
-  .status-dot.ok { background: #d6d3d1; }
-  .status-dot.bad { background: #b85c5c; }
-
-  .ax-status-text {
-    font-size: 13px;
-    font-weight: 500;
-    color: #eeeeee;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .ax-outcome {
-    color: #f5f5f4;
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  .ax-outcome.fallback {
-    color: #c4a46b;
-  }
-
-  .ax-help-card {
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-    padding: 10px;
-    background: rgba(214, 211, 209, 0.05);
-    border: 1px solid rgba(214, 211, 209, 0.12);
-    border-radius: 8px;
-  }
-
-  .ax-help-card strong {
-    color: #eeeeee;
-    font-size: 12.5px;
-  }
-
-  .ax-help-card ol {
-    margin: 0;
-    padding-left: 18px;
-    color: #bebebe;
-    font-size: 11.5px;
-    line-height: 1.5;
-  }
-
-  .command-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .command-row code {
-    flex: 1;
-  }
-
-  .ax-steps-toggle {
-    background: none;
-    border: none;
-    color: #9a9a9a;
-    font-size: 11px;
-    cursor: pointer;
-    padding: 0;
-    margin-top: 4px;
-  }
-
-  .ax-steps-toggle:hover {
-    color: #bebebe;
-  }
-
-  .ax-steps {
-    margin: 6px 0 0;
-    padding-left: 20px;
-    font-size: 11px;
-    color: #9a9a9a;
-    line-height: 1.6;
-  }
-
-  /* ── Buttons ──────────────────────── */
-
-  .btn-primary {
-    padding: 9px 20px;
-    background: #d6d3d1;
-    color: #171717;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-    transition: all 0.12s ease;
-  }
-
-  .btn-primary:hover:not(:disabled) { background: #f5f5f4; }
-  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
-  .full-width { width: 100%; }
-
-  .btn-secondary {
-    padding: 8px 14px;
-    background: #202020;
-    color: #bebebe;
-    border: 1px solid #3a3a3a;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 550;
-    white-space: nowrap;
-    transition: all 0.12s ease;
-  }
-
-  .btn-secondary:hover:not(:disabled) {
-    background: #3a3a3a;
-    color: #eeeeee;
-  }
-
-  .btn-secondary:disabled { opacity: 0.35; cursor: not-allowed; }
-
-  /* ── Toggle ───────────────────────── */
-
-  .toggle {
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-  }
-
-  .toggle-track {
-    position: relative;
-    width: 36px;
-    height: 20px;
-    background: #3a3a3a;
-    border-radius: 99px;
-    transition: background 0.15s ease;
-  }
-
-  .toggle-track input {
-    position: absolute;
-    opacity: 0;
-    width: 100%;
-    height: 100%;
-    cursor: pointer;
-    z-index: 1;
-  }
-
-  .toggle-thumb {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 16px;
-    height: 16px;
-    background: #787878;
-    border-radius: 99px;
-    transition: all 0.15s ease;
-  }
-
-  .toggle-track.on { background: #a8a29e; }
-  .toggle-track.on .toggle-thumb { left: 18px; background: #ffffff; }
-
-  /* ── Toast ────────────────────────── */
-
-  .toast {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
-    border-radius: 10px;
-    font-size: 12.5px;
-    font-weight: 500;
-    animation: slideUp 0.2s ease;
-  }
-
-  .toast.success {
-    background: rgba(214, 211, 209, 0.08);
-    border: 1px solid rgba(214, 211, 209, 0.20);
-    color: #f5f5f4;
-  }
-
-  .toast.error {
-    background: rgba(184, 92, 92, 0.10);
-    border: 1px solid rgba(184, 92, 92, 0.22);
-    color: #d08c8c;
-  }
-
-  @keyframes slideUp {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+  .page { display: flex; flex-direction: column; gap: 22px; color: #f6f6f3; font-size: 15px; line-height: 1.45; }
+  .page-header { display: grid; gap: 3px; }
+  .eyebrow { color: #858991; font-size: 12px; font-weight: 750; letter-spacing: 1.1px; }
+  h1 { font-size: 32px; line-height: 1.1; letter-spacing: -1px; font-weight: 680; }
+  h2 { font-size: 26px; line-height: 1.15; letter-spacing: -0.6px; font-weight: 680; }
+  button, input, select { font: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: .45; }
+
+  .settings-shell { min-height: 500px; display: grid; grid-template-columns: 220px minmax(0, 1fr); border: 1px solid #2d2f34; border-radius: 17px; overflow: hidden; background: #16171a; box-shadow: 0 18px 52px rgba(0,0,0,.18); }
+  .category-nav { padding: 16px 12px; border-right: 1px solid #2d2f34; background: #121316; display: flex; flex-direction: column; gap: 5px; }
+  .category-nav > button { display: flex; justify-content: space-between; align-items: center; padding: 12px 13px; border: 0; border-radius: 9px; background: transparent; color: #989ba2; text-align: left; font-size: 15px; }
+  .category-nav > button:hover { background: #202126; color: #d7d8da; }
+  .category-nav > button.active { background: #292b30; color: #f4f4f2; }
+  .category-nav > button span { color: #63666d; font-size: 21px; line-height: 1; }
+
+  .readiness { margin-top: auto; display: flex; align-items: center; gap: 11px; padding: 14px 9px 8px; min-width: 0; }
+  .readiness i, .permission-state i { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: #8fb08b; box-shadow: 0 0 0 4px rgba(143,176,139,.1); }
+  .readiness i.warning { background: #c4a46b; box-shadow: 0 0 0 4px rgba(196,164,107,.1); }
+  .readiness span { min-width: 0; display: grid; gap: 2px; }
+  .readiness strong { font-size: 13px; }
+  .readiness small { overflow: hidden; color: #777b83; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+
+  .category-content { min-width: 0; padding: 32px 36px 38px; }
+  .content-header { margin-bottom: 26px; }
+  .content-header p { margin-top: 6px; color: #a1a4aa; font-size: 15px; }
+
+  .field { display: grid; gap: 7px; margin-top: 18px; color: #c9cbd0; font-size: 14px; font-weight: 650; }
+  .field small { color: #7f8289; font-size: 12.5px; font-weight: 450; }
+  select, .text-input, .key-actions input { width: 100%; padding: 12px 14px; border: 1px solid #393b41; border-radius: 10px; outline: 0; background: #101114; color: #f3f3f1; font-size: 15px; }
+  select:focus, .text-input:focus, .key-actions input:focus { border-color: #a9aaac; box-shadow: 0 0 0 3px rgba(220,220,216,.08); }
+  .field-error { margin-top: 7px; color: #d79494; font-size: 13px; }
+  .nested { margin: 14px 0 2px; }
+
+  .key-box { margin-top: 22px; padding: 17px; border: 1px solid #303239; border-radius: 12px; background: #121317; }
+  .key-box > div:first-child { display: grid; gap: 2px; }
+  .key-box strong { font-size: 15px; }
+  .key-box small { color: #858991; font-size: 12.5px; }
+  .key-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; margin-top: 13px; }
+  .key-actions.compact { grid-template-columns: minmax(0, 1fr) auto; }
+
+  .primary, .secondary { border-radius: 9px; font-weight: 650; }
+  .primary { margin-top: 26px; padding: 12px 19px; border: 0; background: #efeee9; color: #16171a; }
+  .primary:hover:not(:disabled) { background: #fff; }
+  .secondary { padding: 10px 13px; border: 1px solid #3a3d43; background: #222328; color: #d6d7d9; font-size: 13px; white-space: nowrap; }
+  .secondary:hover:not(:disabled) { border-color: #53565d; background: #2b2d32; color: #fff; }
+
+  .disclosure, .advanced-help { margin-top: 14px; }
+  .disclosure summary, .advanced-help summary { width: fit-content; color: #999ca3; cursor: pointer; font-size: 13px; }
+  .disclosure[open] summary { margin-bottom: 10px; }
+  .disclosure small { display: block; margin-top: 6px; color: #777b83; font-size: 12px; }
+  .disclosure.muted { margin-top: 18px; }
+  .code-row { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 7px; }
+  .code-row span { color: #777b83; font-size: 10px; font-weight: 750; }
+  code { overflow: hidden; padding: 6px 8px; border: 1px solid #34363c; border-radius: 7px; background: #101114; color: #c4c6ca; font-family: "SF Mono", ui-monospace, monospace; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+
+  .shortcut-card { display: flex; align-items: center; gap: 16px; padding: 17px; border: 1px solid #303239; border-radius: 12px; background: #111216; }
+  .shortcut-card kbd { padding: 9px 11px; border: 1px solid #42454c; border-radius: 8px; background: #23252a; color: #f0f0ed; font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .shortcut-card span, .toggle-row span { display: grid; gap: 3px; }
+  .shortcut-card strong, .toggle-row strong { font-size: 15px; }
+  .shortcut-card small, .toggle-row small { color: #858991; font-size: 13px; font-weight: 450; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 19px 0; border-bottom: 1px solid #292b30; color: #ececea; }
+  input[type="checkbox"] { width: 42px; height: 24px; flex: 0 0 auto; accent-color: #ecece8; }
+
+  .privacy-note { padding: 17px; border: 1px solid #303239; border-radius: 12px; background: #111216; }
+  .privacy-note p { margin-top: 4px; color: #8d9097; font-size: 13px; }
+
+  .notice { margin-bottom: 18px; padding: 13px 15px; border: 1px solid #3b3d43; border-radius: 10px; color: #cfd0d2; font-size: 13px; }
+  .notice div { display: grid; gap: 2px; }
+  .notice span { color: #9699a0; }
+  .notice.warning { border-color: rgba(196,164,107,.24); background: rgba(196,164,107,.08); color: #dcc69f; }
+
+  .permission-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 17px; border: 1px solid #303239; border-radius: 12px; background: #111216; }
+  .permission-state { display: flex; align-items: center; gap: 12px; }
+  .permission-state i { background: #777b83; box-shadow: 0 0 0 4px rgba(119,123,131,.1); }
+  .permission-state i.ok { background: #8fb08b; box-shadow: 0 0 0 4px rgba(143,176,139,.1); }
+  .permission-state i.bad { background: #c37878; box-shadow: 0 0 0 4px rgba(195,120,120,.1); }
+  .permission-state span { display: grid; gap: 3px; }
+  .permission-state small { color: #858991; font-size: 12.5px; }
+
+  .help-row { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 18px 2px; border: 0; border-bottom: 1px solid #292b30; background: transparent; color: #eeeeec; text-align: left; }
+  .help-row span { display: grid; gap: 3px; }
+  .help-row small { color: #858991; font-size: 13px; }
+  .help-row b { color: #c6c8cd; font-size: 13px; }
+
+  .check-results { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; margin-top: 18px; }
+  .check-results div { display: grid; gap: 3px; padding: 12px; border: 1px solid #303239; border-radius: 9px; background: #111216; }
+  .check-results span { color: #777b83; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  .check-results strong { font-size: 14px; }
+  .last-attempt { display: grid; gap: 4px; margin-top: 16px; padding: 15px; border: 1px solid #303239; border-radius: 11px; background: #111216; }
+  .last-attempt span { color: #858991; font-size: 12px; }
+  .last-attempt strong { text-transform: capitalize; }
+  .last-attempt small { color: #a0a3a9; text-transform: capitalize; }
+  .last-attempt em { color: #d79494; font-size: 12px; font-style: normal; }
+
+  .advanced-help { margin-top: 20px; padding-top: 4px; }
+  .advanced-content { display: grid; gap: 12px; margin-top: 12px; padding: 16px; border: 1px solid #303239; border-radius: 11px; background: #111216; }
+  .advanced-content p, .advanced-content small { color: #858991; font-size: 12.5px; }
+  .command-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .inspect { width: fit-content; }
+  .route-result { display: grid; gap: 5px; }
+
+  .toast { position: fixed; z-index: 20; right: 24px; bottom: 24px; max-width: 380px; padding: 12px 16px; border-radius: 10px; box-shadow: 0 14px 38px rgba(0,0,0,.35); font-size: 14px; }
+  .toast.success { border: 1px solid rgba(143,176,139,.28); background: #202820; color: #d6e4d3; }
+  .toast.error { border: 1px solid rgba(195,120,120,.28); background: #2b2020; color: #e7b8b8; }
+
+  @media (max-width: 700px) {
+    .settings-shell { grid-template-columns: 1fr; }
+    .category-nav { border-right: 0; border-bottom: 1px solid #2d2f34; }
+    .readiness { display: none; }
+    .category-content { padding: 26px 22px 30px; }
+    .key-actions { grid-template-columns: 1fr 1fr; }
+    .key-actions input { grid-column: 1 / -1; }
   }
 </style>

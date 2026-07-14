@@ -35,6 +35,8 @@
   let loading = $state(true);
   let error = $state("");
   let copiedId = $state<string | null>(null);
+  let clearPending = $state(false);
+  let clearingHistory = $state(false);
 
   let filteredRecords = $derived(
     records.filter((record) => {
@@ -96,12 +98,22 @@
   }
 
   async function clearHistory() {
-    if (!records.length || !confirm("Clear all prompt history?")) return;
+    if (!records.length || clearingHistory) return;
+    if (!clearPending) {
+      clearPending = true;
+      return;
+    }
+
+    clearingHistory = true;
+    error = "";
     try {
-      await invoke("clear_prompt_history");
+      await invoke<number>("clear_prompt_history");
       records = [];
+      clearPending = false;
     } catch (e: any) {
       error = e?.toString?.() ?? `${e}`;
+    } finally {
+      clearingHistory = false;
     }
   }
 
@@ -258,9 +270,21 @@
       {/each}
     </div>
 
+  {/if}
+
+  {#if !loading && records.length > 0}
     <div class="footer-row">
-      <span>{filteredRecords.length} prompt{filteredRecords.length !== 1 ? "s" : ""}</span>
-      <button class="btn-ghost danger" onclick={clearHistory}>Clear all</button>
+      <span>{filteredRecords.length} of {records.length} prompt{records.length !== 1 ? "s" : ""}</span>
+      {#if clearPending}
+        <div class="clear-actions">
+          <button class="btn-ghost" onclick={() => (clearPending = false)} disabled={clearingHistory}>Cancel</button>
+          <button class="btn-ghost danger confirm-danger" onclick={clearHistory} disabled={clearingHistory}>
+            {clearingHistory ? "Clearing..." : "Confirm clear all"}
+          </button>
+        </div>
+      {:else}
+        <button class="btn-ghost danger" onclick={clearHistory}>Clear all</button>
+      {/if}
     </div>
   {/if}
 </div>
@@ -537,6 +561,17 @@
 
   .actions {
     justify-content: flex-start;
+  }
+
+  .clear-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .confirm-danger {
+    color: #d08c8c;
+    background: rgba(184, 92, 92, 0.10);
   }
 
   .footer-row {
